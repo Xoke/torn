@@ -1,0 +1,13 @@
+// ==UserScript==
+// @name         Torn Target Manager
+// @namespace    http://tampermonkey.net/
+// @version      4.0
+// @description  Manages a priority queue of elimination targets with live status updates, smart sorting, and bulk import from enemies/targets lists
+// @author       Xoke
+// @match        https://www.torn.com/*
+// @exclude      https://www.torn.com/loader.php*
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_addStyle
+// @run-at       document-end
+// ==/UserScript==
