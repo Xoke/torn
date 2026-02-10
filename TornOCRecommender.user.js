@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      1.1
+// @version      1.2
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -131,11 +131,13 @@
         return joinableSlots;
     }
 
+    const MAX_RECOMMENDATIONS = 3;
+
     // Find recommended OCs - returns { primary, secondary[] }
     function findRecommendedOCs(slots) {
         if (slots.length === 0) return { primary: null, secondary: [] };
 
-        const results = [];
+        let results = [];
 
         // Check if user qualifies for Level 7+
         // They need 50%+ in a Level 7+ slot AND 70%+ on ANY level 2-6 slot
@@ -151,19 +153,21 @@
                 if (b.level !== a.level) return b.level - a.level;
                 return b.successRate - a.successRate;
             });
-            results.push(...level7PlusSlots);
+            results = level7PlusSlots;
         }
 
-        // Also include qualifying Level 2-6 slots (70%+)
-        const qualifyingSlots = slots.filter(s =>
-            s.level >= 2 && s.level <= 6 && s.successRate >= THRESHOLD_LEVEL_2_6
-        );
-        if (qualifyingSlots.length > 0) {
-            qualifyingSlots.sort((a, b) => {
-                if (b.level !== a.level) return b.level - a.level;
-                return b.successRate - a.successRate;
-            });
-            results.push(...qualifyingSlots);
+        // Fall back to qualifying Level 2-6 slots (70%+) if no level 7+ found
+        if (results.length === 0) {
+            const qualifyingSlots = slots.filter(s =>
+                s.level >= 2 && s.level <= 6 && s.successRate >= THRESHOLD_LEVEL_2_6
+            );
+            if (qualifyingSlots.length > 0) {
+                qualifyingSlots.sort((a, b) => {
+                    if (b.level !== a.level) return b.level - a.level;
+                    return b.successRate - a.successRate;
+                });
+                results = qualifyingSlots;
+            }
         }
 
         // Fallback: Level 1 slots
@@ -171,11 +175,15 @@
             const level1Slots = slots.filter(s => s.level === 1);
             if (level1Slots.length > 0) {
                 level1Slots.sort((a, b) => b.successRate - a.successRate);
-                results.push(...level1Slots);
+                results = level1Slots;
             }
         }
 
         if (results.length === 0) return { primary: null, secondary: [] };
+
+        // Only show slots at the same level as the best one, capped at MAX_RECOMMENDATIONS
+        const bestLevel = results[0].level;
+        results = results.filter(s => s.level === bestLevel).slice(0, MAX_RECOMMENDATIONS);
 
         return { primary: results[0], secondary: results.slice(1) };
     }
