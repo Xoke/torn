@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      1.7
-// @description  Highlights OC participants with under 70% success rate for levels 2-6
+// @version      1.8
+// @description  Highlights low success OC participants, stalled OCs, and missing items
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
 // @homepageURL  https://github.com/Xoke/torn

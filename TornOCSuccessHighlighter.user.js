@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      1.7
-// @description  Highlights OC participants with under 70% success rate for levels 2-6
+// @version      1.8
+// @description  Highlights low success OC participants, stalled OCs, and missing items
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
 // @homepageURL  https://github.com/Xoke/torn
@@ -17,9 +17,21 @@
     const SUCCESS_THRESHOLD = 70;
     const MIN_LEVEL = 2;
     const MAX_LEVEL = 6;
+
+    // Low success rate styling (red)
     const HIGHLIGHT_BORDER = '4px solid #ff0000';
     const HIGHLIGHT_OUTLINE = '2px solid #ffff00';
     const HIGHLIGHT_BOX_SHADOW = '0 0 10px 3px rgba(255, 0, 0, 0.8)';
+
+    // Stalled/paused OC styling (orange)
+    const STALLED_BORDER = '4px solid #ff8800';
+    const STALLED_OUTLINE = '2px solid #ffcc00';
+    const STALLED_BOX_SHADOW = '0 0 10px 3px rgba(255, 136, 0, 0.8)';
+
+    // Missing item styling (purple)
+    const MISSING_ITEM_BORDER = '4px solid #aa00ff';
+    const MISSING_ITEM_OUTLINE = '2px solid #dd66ff';
+    const MISSING_ITEM_BOX_SHADOW = '0 0 10px 3px rgba(170, 0, 255, 0.8)';
 
     // Find the crime level for a slot element by traversing up to find the crime card
     function getCrimeLevel(slotElement) {
@@ -66,8 +78,64 @@
         return isNaN(rate) ? null : rate;
     }
 
-    // Main function to highlight low success slots
-    function highlightLowSuccessSlots() {
+    // Get the crime card element from a child element
+    function getCrimeCard(element) {
+        let parent = element.parentElement;
+        while (parent && !parent.hasAttribute('data-oc-id')) {
+            parent = parent.parentElement;
+            if (!parent || parent === document.body) return null;
+        }
+        return parent;
+    }
+
+    // Check if a crime card is paused/stalled
+    function isCrimePaused(crimeCard) {
+        if (!crimeCard) return false;
+        if (crimeCard.querySelector('[class*="paused___"]')) return true;
+        if (crimeCard.querySelector('[aria-label="paused"]')) return true;
+        return false;
+    }
+
+    // Check if a slot has a missing item
+    function hasMissingItem(slotElement) {
+        return !!slotElement.querySelector('[class*="itemHavefalse"], [class*="OC2-itemHavefalse"]');
+    }
+
+    // Apply highlight styling to an element
+    function applyHighlight(element, border, outline, boxShadow, tag) {
+        element.style.setProperty('border', border, 'important');
+        element.style.setProperty('outline', outline, 'important');
+        element.style.setProperty('box-shadow', boxShadow, 'important');
+        element.dataset.ocHighlighted = tag;
+    }
+
+    // Clear highlight styling from an element
+    function clearHighlight(element) {
+        element.style.removeProperty('border');
+        element.style.removeProperty('outline');
+        element.style.removeProperty('box-shadow');
+        element.dataset.ocHighlighted = '';
+    }
+
+    // Highlight stalled OC crime cards
+    function highlightStalledOCs() {
+        const crimeCards = document.querySelectorAll('[data-oc-id]');
+
+        crimeCards.forEach(card => {
+            const paused = isCrimePaused(card);
+            const currentTag = card.dataset.ocHighlighted;
+
+            if (paused && currentTag !== 'stalled') {
+                applyHighlight(card, STALLED_BORDER, STALLED_OUTLINE, STALLED_BOX_SHADOW, 'stalled');
+                console.log(`Stalled OC: ${card.getAttribute('data-oc-id')}`);
+            } else if (!paused && currentTag === 'stalled') {
+                clearHighlight(card);
+            }
+        });
+    }
+
+    // Main function to highlight low success slots and missing items
+    function highlightSlotIssues() {
         // Find all slot wrappers - class pattern: wrapper___XXXXX with success color class
         const slots = document.querySelectorAll('[class*="wrapper___"][class*="success"]');
 
@@ -75,33 +143,30 @@
             // Skip if not a slot wrapper (check for slotHeader inside)
             if (!slot.querySelector('[class*="slotHeader___"]')) return;
 
-            // Check if already processed
-            const isHighlighted = slot.dataset.ocHighlighted === 'true';
-            const wasChecked = slot.dataset.ocChecked === 'true';
+            const currentTag = slot.dataset.ocHighlighted || '';
 
             // Get crime level
             const level = getCrimeLevel(slot);
             if (level === null) return;
 
-            // Skip if not in target level range (2-6)
-            if (level < MIN_LEVEL || level > MAX_LEVEL) {
-                if (isHighlighted) {
-                    slot.style.removeProperty('border');
-                    slot.style.removeProperty('outline');
-                    slot.style.removeProperty('box-shadow');
-                    slot.dataset.ocHighlighted = 'false';
+            // Check for missing items (any level, any slot with a player)
+            if (hasPlayer(slot) && hasMissingItem(slot)) {
+                if (currentTag !== 'missingItem') {
+                    applyHighlight(slot, MISSING_ITEM_BORDER, MISSING_ITEM_OUTLINE, MISSING_ITEM_BOX_SHADOW, 'missingItem');
+                    console.log(`Missing item: Level ${level}`);
                 }
+                return;
+            }
+
+            // Low success rate check only for level 2-6
+            if (level < MIN_LEVEL || level > MAX_LEVEL) {
+                if (currentTag === 'lowSuccess') clearHighlight(slot);
                 return;
             }
 
             // Only highlight slots with actual players
             if (!hasPlayer(slot)) {
-                if (isHighlighted) {
-                    slot.style.removeProperty('border');
-                    slot.style.removeProperty('outline');
-                    slot.style.removeProperty('box-shadow');
-                    slot.dataset.ocHighlighted = 'false';
-                }
+                if (currentTag === 'lowSuccess') clearHighlight(slot);
                 return;
             }
 
@@ -109,25 +174,22 @@
             const successRate = getSuccessRate(slot);
             if (successRate === null) return;
 
-            // Highlight if below threshold using inline styles
+            // Highlight if below threshold
             if (successRate < SUCCESS_THRESHOLD) {
-                if (!isHighlighted) {
-                    slot.style.setProperty('border', HIGHLIGHT_BORDER, 'important');
-                    slot.style.setProperty('outline', HIGHLIGHT_OUTLINE, 'important');
-                    slot.style.setProperty('box-shadow', HIGHLIGHT_BOX_SHADOW, 'important');
-                    slot.dataset.ocHighlighted = 'true';
-                    console.log(`Highlighted slot: Level ${level}, Success ${successRate}%`);
+                if (currentTag !== 'lowSuccess') {
+                    applyHighlight(slot, HIGHLIGHT_BORDER, HIGHLIGHT_OUTLINE, HIGHLIGHT_BOX_SHADOW, 'lowSuccess');
+                    console.log(`Low success slot: Level ${level}, Success ${successRate}%`);
                 }
             } else {
-                if (isHighlighted) {
-                    slot.style.removeProperty('border');
-                    slot.style.removeProperty('outline');
-                    slot.style.removeProperty('box-shadow');
-                    slot.dataset.ocHighlighted = 'false';
-                }
+                if (currentTag === 'lowSuccess') clearHighlight(slot);
             }
-            slot.dataset.ocChecked = 'true';
         });
+    }
+
+    // Run all checks
+    function runAllChecks() {
+        highlightStalledOCs();
+        highlightSlotIssues();
     }
 
     // Initialize with retry logic for dynamic content
@@ -151,13 +213,13 @@
         console.log('Torn OC Success Highlighter: Initialized');
 
         // Initial highlight
-        highlightLowSuccessSlots();
+        runAllChecks();
 
         // Set up MutationObserver for dynamic updates
         const observer = new MutationObserver((mutations) => {
             // Debounce updates
             clearTimeout(window.ocHighlighterTimeout);
-            window.ocHighlighterTimeout = setTimeout(highlightLowSuccessSlots, 100);
+            window.ocHighlighterTimeout = setTimeout(runAllChecks, 100);
         });
 
         // Observe the faction crimes container
