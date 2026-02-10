@@ -11,10 +11,10 @@ Monitors the attack log and alerts you when someone initiates an attack or joins
 Exports faction member data to CSV format, including battle stats from FF Scouter. Useful for analyzing faction strength and planning wars.
 
 ### [Torn OC Recommender](https://raw.githubusercontent.com/Xoke/torn/main/TornOCRecommender.user.js)
-Recommends the best Organized Crime to join based on your success rates. Follows faction rules: Level 2-6 require 70%+, Level 7+ require 50%+. Highlights the recommended slot with a green glow.
+WIP - Recommends the best Organized Crime to join based on your success rates. Follows faction rules: Level 2-6 require 70%+, Level 7+ require 50%+. Highlights the recommended slot with a green glow.
 
 ### [Torn OC Success Highlighter](https://raw.githubusercontent.com/Xoke/torn/main/TornOCSuccessHighlighter.user.js)
-Highlights OC participants who have under 70% success rate in Level 2-6 crimes. Makes it easy to spot members who might need to be reassigned.
+WIP - Highlights OC participants who have under 70% success rate in Level 2-6 crimes. Makes it easy to spot members who might need to be reassigned.
 
 ### [Torn Ranked War Target Finder](https://raw.githubusercontent.com/Xoke/torn/main/TornRankedWarTargetFinder.user.js)
 Helps find suitable targets during ranked wars. Scrapes faction member data, shows battle stats, and allows filtering by various criteria.
@@ -38,3 +38,4 @@ Some scripts require [FF Scouter](https://www.torn.com/forums.php#/p=threads&t=1
 ## License
 
 See [LICENSE](LICENSE) for details.
+
