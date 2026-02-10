@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      2.5
+// @version      2.6
 // @description  Highlights low success OC participants, stalled OCs, and missing items
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -103,19 +103,23 @@
         return !!slotElement.querySelector('[class*="itemHavefalse"], [class*="OC2-itemHavefalse"]');
     }
 
-    // Apply highlight styling to an element
+    // Apply highlight styling to an element (uses outline-offset to draw outside overlay layers)
     function applyHighlight(element, border, outline, boxShadow, tag) {
-        element.style.setProperty('border', border, 'important');
         element.style.setProperty('outline', outline, 'important');
+        element.style.setProperty('outline-offset', '2px', 'important');
         element.style.setProperty('box-shadow', boxShadow, 'important');
+        element.style.setProperty('position', 'relative', 'important');
+        element.style.setProperty('z-index', '5', 'important');
         element.dataset.ocHighlighted = tag;
     }
 
     // Clear highlight styling from an element
     function clearHighlight(element) {
-        element.style.removeProperty('border');
         element.style.removeProperty('outline');
+        element.style.removeProperty('outline-offset');
         element.style.removeProperty('box-shadow');
+        element.style.removeProperty('position');
+        element.style.removeProperty('z-index');
         element.dataset.ocHighlighted = '';
     }
 
