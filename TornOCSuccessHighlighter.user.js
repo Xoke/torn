@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      2.2
+// @version      2.3
 // @description  Highlights low success OC participants, stalled OCs, and missing items
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -150,18 +150,16 @@
 
     // Highlight stalled OC rows in OC2 table view
     function highlightStalledOC2Rows() {
-        const crimeRows = document.querySelectorAll('.OC2-crimeLi');
+        const crimeRows = document.querySelectorAll('[class*="OC2-crimeLi"]');
 
         crimeRows.forEach(row => {
-            const countdownText = row.querySelector('.OC2-countdownText');
-            if (!countdownText) return;
+            // Check text content for Delay
+            const hasDelay = row.textContent.includes('Delay:') || row.textContent.includes('Delay ');
 
-            const hasDelay = countdownText.textContent.includes('Delay');
-
-            if (hasDelay) {
+            if (hasDelay && row.className.includes('OC2-crimeID_')) {
                 if (!row.classList.contains('oc-highlight-stalled')) {
                     row.classList.add('oc-highlight-stalled');
-                    console.log(`Stalled OC2 row: ${row.className}`);
+                    console.log(`OC Highlighter: Stalled OC2 row found`);
                 }
             } else {
                 row.classList.remove('oc-highlight-stalled');
@@ -223,48 +221,34 @@
 
     // Highlight unavailable members in the OC2 table view
     function highlightUnavailableMembers() {
-        // Find ALL crime rows (both recruiting and full) that have a Delay countdown
-        const crimeRows = document.querySelectorAll('.OC2-crimeLi');
+        // Go directly to all member rows - no crime row dependency
+        const memberRows = document.querySelectorAll('[class*="OC2-crimeMemberLi"]');
 
-        crimeRows.forEach(crimeRow => {
-            // Check if this crime has a delay
-            const countdownText = crimeRow.querySelector('.OC2-countdownText');
-            if (!countdownText || !countdownText.textContent.includes('Delay')) return;
+        memberRows.forEach(memberRow => {
+            // Look for status text with non-okay status
+            // Check the actual text content and color as fallback
+            const statusCell = memberRow.querySelector('[class*="OC2-tableCrimeMemberStatus"]');
+            if (!statusCell) return;
 
-            // Get the crime ID from the class name
-            const crimeIdMatch = crimeRow.className.match(/OC2-crimeID_(\d+)/);
-            if (!crimeIdMatch) return;
-            const crimeId = crimeIdMatch[1];
+            const statusText = statusCell.textContent.trim().toLowerCase();
+            const isUnavailable = statusText.includes('hospital') ||
+                statusText.includes('traveling') ||
+                statusText.includes('returning') ||
+                statusText.includes('jail') ||
+                statusText.includes('federal') ||
+                statusText.includes('abroad') ||
+                statusText.includes('flying');
 
-            // Find all member rows for this crime
-            const memberRows = document.querySelectorAll(`.OC2-crimeMemberLi.OC2-crimeID_${crimeId}`);
-
-            memberRows.forEach(memberRow => {
-                // Check ALL status text elements for unavailable statuses
-                const statusEls = memberRow.querySelectorAll('.OC2-statusText');
-                let isUnavailable = false;
-                for (const el of statusEls) {
-                    if (el.classList.contains('hospital') ||
-                        el.classList.contains('traveling') ||
-                        el.classList.contains('jail') ||
-                        el.classList.contains('federal') ||
-                        el.classList.contains('abroad')) {
-                        isUnavailable = true;
-                        break;
-                    }
+            if (isUnavailable) {
+                if (!memberRow.classList.contains('oc-highlight-unavailable')) {
+                    memberRow.classList.add('oc-highlight-unavailable');
+                    const nameEl = memberRow.querySelector('[class*="OC2-tableCrimeMemberName"] a');
+                    const name = nameEl ? nameEl.textContent.trim() : 'Unknown';
+                    console.log(`OC Highlighter: Unavailable member: ${name} - ${statusText}`);
                 }
-
-                if (isUnavailable) {
-                    if (!memberRow.classList.contains('oc-highlight-unavailable')) {
-                        memberRow.classList.add('oc-highlight-unavailable');
-                        const nameEl = memberRow.querySelector('.OC2-tableCrimeMemberName a');
-                        const name = nameEl ? nameEl.textContent.trim() : 'Unknown';
-                        console.log(`Unavailable member: ${name} (Crime ${crimeId})`);
-                    }
-                } else {
-                    memberRow.classList.remove('oc-highlight-unavailable');
-                }
-            });
+            } else {
+                memberRow.classList.remove('oc-highlight-unavailable');
+            }
         });
     }
 
