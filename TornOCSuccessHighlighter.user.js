@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      2.3
+// @version      2.4
 // @description  Highlights low success OC participants, stalled OCs, and missing items
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -33,19 +33,9 @@
     const MISSING_ITEM_OUTLINE = '2px solid #dd66ff';
     const MISSING_ITEM_BOX_SHADOW = '0 0 10px 3px rgba(170, 0, 255, 0.8)';
 
-    // Inject CSS for OC2 highlighting (survives OC2 style overwrites)
-    const style = document.createElement('style');
-    style.textContent = `
-        .oc-highlight-stalled {
-            background-color: rgba(255, 136, 0, 0.3) !important;
-            border-left: 4px solid #ff8800 !important;
-        }
-        .oc-highlight-unavailable {
-            background-color: rgba(255, 50, 50, 0.25) !important;
-            border-left: 4px solid #ff4444 !important;
-        }
-    `;
-    document.head.appendChild(style);
+    // OC2 inline style values (reapplied every cycle)
+    const STALLED_OC2_STYLES = 'background-color: rgba(255, 136, 0, 0.3) !important; border-left: 4px solid #ff8800 !important;';
+    const UNAVAILABLE_OC2_STYLES = 'background-color: rgba(255, 50, 50, 0.25) !important; border-left: 4px solid #ff4444 !important;';
 
     // Find the crime level for a slot element by traversing up to find the crime card
     function getCrimeLevel(slotElement) {
@@ -148,21 +138,30 @@
         });
     }
 
+    // Apply OC2 styles by appending to existing style attribute
+    function applyOC2Style(element, extraStyles) {
+        const current = element.getAttribute('style') || '';
+        // Remove any previous OC highlighter styles
+        const cleaned = current.replace(/\/\*och\*\/.*?\/\*\/och\*\//g, '').trim();
+        // Append our styles wrapped in markers
+        element.setAttribute('style', cleaned + ' /*och*/' + extraStyles + '/*/och*/');
+    }
+
+    function clearOC2Style(element) {
+        const current = element.getAttribute('style') || '';
+        const cleaned = current.replace(/\/\*och\*\/.*?\/\*\/och\*\//g, '').trim();
+        element.setAttribute('style', cleaned);
+    }
+
     // Highlight stalled OC rows in OC2 table view
     function highlightStalledOC2Rows() {
         const crimeRows = document.querySelectorAll('[class*="OC2-crimeLi"]');
 
         crimeRows.forEach(row => {
-            // Check text content for Delay
             const hasDelay = row.textContent.includes('Delay:') || row.textContent.includes('Delay ');
 
             if (hasDelay && row.className.includes('OC2-crimeID_')) {
-                if (!row.classList.contains('oc-highlight-stalled')) {
-                    row.classList.add('oc-highlight-stalled');
-                    console.log(`OC Highlighter: Stalled OC2 row found`);
-                }
-            } else {
-                row.classList.remove('oc-highlight-stalled');
+                applyOC2Style(row, STALLED_OC2_STYLES);
             }
         });
     }
@@ -221,12 +220,9 @@
 
     // Highlight unavailable members in the OC2 table view
     function highlightUnavailableMembers() {
-        // Go directly to all member rows - no crime row dependency
         const memberRows = document.querySelectorAll('[class*="OC2-crimeMemberLi"]');
 
         memberRows.forEach(memberRow => {
-            // Look for status text with non-okay status
-            // Check the actual text content and color as fallback
             const statusCell = memberRow.querySelector('[class*="OC2-tableCrimeMemberStatus"]');
             if (!statusCell) return;
 
@@ -240,14 +236,7 @@
                 statusText.includes('flying');
 
             if (isUnavailable) {
-                if (!memberRow.classList.contains('oc-highlight-unavailable')) {
-                    memberRow.classList.add('oc-highlight-unavailable');
-                    const nameEl = memberRow.querySelector('[class*="OC2-tableCrimeMemberName"] a');
-                    const name = nameEl ? nameEl.textContent.trim() : 'Unknown';
-                    console.log(`OC Highlighter: Unavailable member: ${name} - ${statusText}`);
-                }
-            } else {
-                memberRow.classList.remove('oc-highlight-unavailable');
+                applyOC2Style(memberRow, UNAVAILABLE_OC2_STYLES);
             }
         });
     }
