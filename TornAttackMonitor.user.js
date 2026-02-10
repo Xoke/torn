@@ -5,9 +5,9 @@
 // @description  Monitor for attack initiations on Torn
 // @author       Xoke
 // @match        https://www.torn.com/loader.php?sid=attack*
-// @homepageURL  https://xoke.org/
-// @updateURL    https://xoke.org/TornAttackMonitor.meta.js
-// @downloadURL  https://xoke.org/TornAttackMonitor.user.js
+// @homepageURL  https://github.com/Xoke/torn
+// @updateURL    https://raw.githubusercontent.com/Xoke/torn/main/TornAttackMonitor.meta.js
+// @downloadURL  https://raw.githubusercontent.com/Xoke/torn/main/TornAttackMonitor.user.js
 // @grant        none
 // ==/UserScript==
 

@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      1.0
+// @version      1.1
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
-// @homepageURL  https://xoke.org/
-// @updateURL    https://xoke.org/TornOCRecommender.meta.js
-// @downloadURL  https://xoke.org/TornOCRecommender.user.js
+// @homepageURL  https://github.com/Xoke/torn
+// @updateURL    https://raw.githubusercontent.com/Xoke/torn/main/TornOCRecommender.meta.js
+// @downloadURL  https://raw.githubusercontent.com/Xoke/torn/main/TornOCRecommender.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -17,11 +17,17 @@
     // Thresholds
     const THRESHOLD_LEVEL_2_6 = 70;  // Level 2-6 need 70%+
     const THRESHOLD_LEVEL_7_PLUS = 50;  // Level 7+ need 50%+
+    const PREFERRED_LEVEL_7_PLUS = 60;  // Level 7+ preferred 60%+
 
-    // Styling for recommendations
+    // Styling for primary recommendation
     const RECOMMEND_BORDER = '4px solid #00ff00';
     const RECOMMEND_OUTLINE = '2px solid #00ffff';
     const RECOMMEND_BOX_SHADOW = '0 0 15px 5px rgba(0, 255, 0, 0.6)';
+
+    // Styling for secondary recommendations
+    const SECONDARY_BORDER = '3px solid #ffaa00';
+    const SECONDARY_OUTLINE = '2px solid #ffcc44';
+    const SECONDARY_BOX_SHADOW = '0 0 10px 3px rgba(255, 170, 0, 0.4)';
 
     // Get crime level from a slot element
     function getCrimeLevel(slotElement) {
@@ -125,58 +131,53 @@
         return joinableSlots;
     }
 
-    // Find the best OC to recommend
-    function findBestOC(slots) {
-        if (slots.length === 0) return null;
+    // Find recommended OCs - returns { primary, secondary[] }
+    function findRecommendedOCs(slots) {
+        if (slots.length === 0) return { primary: null, secondary: [] };
 
-        // Group by level
-        const byLevel = {};
-        slots.forEach(slot => {
-            if (!byLevel[slot.level]) byLevel[slot.level] = [];
-            byLevel[slot.level].push(slot);
-        });
+        const results = [];
 
         // Check if user qualifies for Level 7+
-        // They need 50%+ in a Level 7+ slot AND should be 70%+ capable in Level 2-6
+        // They need 50%+ in a Level 7+ slot AND 70%+ on ANY level 2-6 slot
         const level7PlusSlots = slots.filter(s => s.level >= 7 && s.successRate >= THRESHOLD_LEVEL_7_PLUS);
+        const anyLevel2to6Meet70 = slots.some(s => s.level >= 2 && s.level <= 6 && s.successRate >= THRESHOLD_LEVEL_2_6);
 
-        // Check if they're "high level" - meaning they have 70%+ in all available Level 2-6 slots
-        const level2to6Slots = slots.filter(s => s.level >= 2 && s.level <= 6);
-        const allLevel2to6Meet70 = level2to6Slots.length === 0 ||
-            level2to6Slots.every(s => s.successRate >= THRESHOLD_LEVEL_2_6);
-
-        // If they qualify for Level 7+ and are competent at Level 2-6, recommend highest Level 7+
-        if (level7PlusSlots.length > 0 && allLevel2to6Meet70) {
-            // Sort by level descending, then by success rate descending
+        if (level7PlusSlots.length > 0 && anyLevel2to6Meet70) {
+            // Sort: prefer 60%+ first, then by level descending, then success rate descending
             level7PlusSlots.sort((a, b) => {
+                const aPreferred = a.successRate >= PREFERRED_LEVEL_7_PLUS ? 1 : 0;
+                const bPreferred = b.successRate >= PREFERRED_LEVEL_7_PLUS ? 1 : 0;
+                if (bPreferred !== aPreferred) return bPreferred - aPreferred;
                 if (b.level !== a.level) return b.level - a.level;
                 return b.successRate - a.successRate;
             });
-            return level7PlusSlots[0];
+            results.push(...level7PlusSlots);
         }
 
-        // Otherwise, find highest Level 2-6 with 70%+
+        // Also include qualifying Level 2-6 slots (70%+)
         const qualifyingSlots = slots.filter(s =>
             s.level >= 2 && s.level <= 6 && s.successRate >= THRESHOLD_LEVEL_2_6
         );
-
         if (qualifyingSlots.length > 0) {
-            // Sort by level descending, then by success rate descending
             qualifyingSlots.sort((a, b) => {
                 if (b.level !== a.level) return b.level - a.level;
                 return b.successRate - a.successRate;
             });
-            return qualifyingSlots[0];
+            results.push(...qualifyingSlots);
         }
 
-        // Fallback: recommend Level 1 if available
-        const level1Slots = slots.filter(s => s.level === 1);
-        if (level1Slots.length > 0) {
-            level1Slots.sort((a, b) => b.successRate - a.successRate);
-            return level1Slots[0];
+        // Fallback: Level 1 slots
+        if (results.length === 0) {
+            const level1Slots = slots.filter(s => s.level === 1);
+            if (level1Slots.length > 0) {
+                level1Slots.sort((a, b) => b.successRate - a.successRate);
+                results.push(...level1Slots);
+            }
         }
 
-        return null;
+        if (results.length === 0) return { primary: null, secondary: [] };
+
+        return { primary: results[0], secondary: results.slice(1) };
     }
 
     // Clear all recommendations
@@ -193,24 +194,34 @@
     }
 
     // Apply recommendation styling
-    function applyRecommendation(slot) {
+    function applyRecommendation(slot, isPrimary) {
         const element = slot.element;
 
-        element.style.setProperty('border', RECOMMEND_BORDER, 'important');
-        element.style.setProperty('outline', RECOMMEND_OUTLINE, 'important');
-        element.style.setProperty('box-shadow', RECOMMEND_BOX_SHADOW, 'important');
+        if (isPrimary) {
+            element.style.setProperty('border', RECOMMEND_BORDER, 'important');
+            element.style.setProperty('outline', RECOMMEND_OUTLINE, 'important');
+            element.style.setProperty('box-shadow', RECOMMEND_BOX_SHADOW, 'important');
+        } else {
+            element.style.setProperty('border', SECONDARY_BORDER, 'important');
+            element.style.setProperty('outline', SECONDARY_OUTLINE, 'important');
+            element.style.setProperty('box-shadow', SECONDARY_BOX_SHADOW, 'important');
+        }
         element.dataset.ocRecommended = 'true';
 
         // Add a label if not already present
         if (!element.querySelector('.oc-recommend-label')) {
             const label = document.createElement('div');
             label.className = 'oc-recommend-label';
+            const bgColor = isPrimary ? '#00ff00' : '#ffaa00';
+            const labelText = isPrimary
+                ? `★ BEST (Lv${slot.level} - ${slot.successRate}%)`
+                : `Lv${slot.level} - ${slot.successRate}%`;
             label.style.cssText = `
                 position: absolute;
                 top: -20px;
                 left: 50%;
                 transform: translateX(-50%);
-                background: #00ff00;
+                background: ${bgColor};
                 color: #000;
                 padding: 2px 8px;
                 font-size: 10px;
@@ -219,7 +230,7 @@
                 z-index: 1000;
                 white-space: nowrap;
             `;
-            label.textContent = `★ JOIN THIS (Lv${slot.level} - ${slot.successRate}%)`;
+            label.textContent = labelText;
 
             // Make sure parent has relative positioning
             if (getComputedStyle(element).position === 'static') {
@@ -242,11 +253,16 @@
 
         console.log('Torn OC Recommender: Found', joinableSlots.length, 'joinable slots');
 
-        const bestOC = findBestOC(joinableSlots);
+        const { primary, secondary } = findRecommendedOCs(joinableSlots);
 
-        if (bestOC) {
-            console.log(`Torn OC Recommender: Best OC is Level ${bestOC.level} "${bestOC.crimeName}" - ${bestOC.roleName} (${bestOC.successRate}%)`);
-            applyRecommendation(bestOC);
+        if (primary) {
+            console.log(`Torn OC Recommender: Best OC is Level ${primary.level} "${primary.crimeName}" - ${primary.roleName} (${primary.successRate}%)`);
+            applyRecommendation(primary, true);
+
+            secondary.forEach(slot => {
+                console.log(`Torn OC Recommender: Also recommended: Level ${slot.level} "${slot.crimeName}" - ${slot.roleName} (${slot.successRate}%)`);
+                applyRecommendation(slot, false);
+            });
         } else {
             console.log('Torn OC Recommender: No suitable OC found');
         }

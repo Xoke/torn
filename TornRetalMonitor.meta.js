@@ -11,6 +11,7 @@
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @connect      api.torn.com
-// @downloadURL  https://xoke.org/TornRetalMonitor.user.js
-// @updateURL    https://xoke.org/TornRetalMonitor.meta.js
+// @homepageURL  https://github.com/Xoke/torn
+// @downloadURL  https://raw.githubusercontent.com/Xoke/torn/main/TornRetalMonitor.user.js
+// @updateURL    https://raw.githubusercontent.com/Xoke/torn/main/TornRetalMonitor.meta.js
 // ==/UserScript==

@@ -4,25 +4,25 @@ A collection of Greasemonkey/Tampermonkey userscripts for [Torn](https://www.tor
 
 ## Scripts
 
-### [Torn Attack Monitor](TornAttackMonitor.user.js)
+### [Torn Attack Monitor](https://raw.githubusercontent.com/Xoke/torn/main/TornAttackMonitor.user.js)
 Monitors the attack log and alerts you when someone initiates an attack or joins a fight. Displays notifications in the top-right corner of the screen.
 
-### [Torn Faction CSV Exporter](TornFactionCSVExporter.user.js)
+### [Torn Faction CSV Exporter](https://raw.githubusercontent.com/Xoke/torn/main/TornFactionCSVExporter.user.js)
 Exports faction member data to CSV format, including battle stats from FF Scouter. Useful for analyzing faction strength and planning wars.
 
-### [Torn OC Recommender](TornOCRecommender.user.js)
+### [Torn OC Recommender](https://raw.githubusercontent.com/Xoke/torn/main/TornOCRecommender.user.js)
 Recommends the best Organized Crime to join based on your success rates. Follows faction rules: Level 2-6 require 70%+, Level 7+ require 50%+. Highlights the recommended slot with a green glow.
 
-### [Torn OC Success Highlighter](TornOCSuccessHighlighter.user.js)
+### [Torn OC Success Highlighter](https://raw.githubusercontent.com/Xoke/torn/main/TornOCSuccessHighlighter.user.js)
 Highlights OC participants who have under 70% success rate in Level 2-6 crimes. Makes it easy to spot members who might need to be reassigned.
 
-### [Torn Ranked War Target Finder](TornRankedWarTargetFinder.user.js)
+### [Torn Ranked War Target Finder](https://raw.githubusercontent.com/Xoke/torn/main/TornRankedWarTargetFinder.user.js)
 Helps find suitable targets during ranked wars. Scrapes faction member data, shows battle stats, and allows filtering by various criteria.
 
-### [Torn Retal Monitor](TornRetalMonitor.user.js)
+### [Torn Retal Monitor](https://raw.githubusercontent.com/Xoke/torn/main/TornRetalMonitor.user.js)
 Monitors for retaliation opportunities and tracks players who have attacked faction members.
 
-### [Torn Target Manager](TornTargetManager.user.js)
+### [Torn Target Manager](https://raw.githubusercontent.com/Xoke/torn/main/TornTargetManager.user.js)
 Comprehensive target management tool for tracking and organizing attack targets.
 
 ## Installation

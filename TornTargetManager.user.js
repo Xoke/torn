@@ -10,6 +10,9 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @run-at       document-end
+// @homepageURL  https://github.com/Xoke/torn
+// @updateURL    https://raw.githubusercontent.com/Xoke/torn/main/TornTargetManager.meta.js
+// @downloadURL  https://raw.githubusercontent.com/Xoke/torn/main/TornTargetManager.user.js
 // ==/UserScript==
 
 (function() {
