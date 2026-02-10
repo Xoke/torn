@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      2.0
+// @version      2.1
 // @description  Highlights low success OC participants, stalled OCs, and missing items
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -276,8 +276,8 @@
     const MAX_INIT_RETRIES = 40;
 
     function initialize() {
-        // Look for the faction crimes root
-        const crimesRoot = document.querySelector('#faction-crimes-root, [class*="scenario___"]');
+        // Look for the faction crimes root or OC2 container
+        const crimesRoot = document.querySelector('#faction-crimes-root, [class*="scenario___"], .OC2-memberViewer');
 
         if (!crimesRoot) {
             initRetryCount++;
@@ -295,13 +295,12 @@
         runAllChecks();
 
         // Set up MutationObserver for dynamic updates
-        const observer = new MutationObserver((mutations) => {
-            // Debounce updates
+        const observer = new MutationObserver(() => {
             clearTimeout(window.ocHighlighterTimeout);
             window.ocHighlighterTimeout = setTimeout(runAllChecks, 100);
         });
 
-        // Observe the faction crimes container
+        // Observe the native faction crimes container
         const container = document.querySelector('#faction-crimes, .faction-crimes-wrap, #faction-crimes-root');
         if (container) {
             observer.observe(container, {
@@ -312,11 +311,25 @@
             });
         }
 
-        // Also observe body for SPA navigation
+        // Observe the OC2 container for style/class changes and new elements
+        const oc2Container = document.querySelector('.OC2-memberViewer');
+        if (oc2Container) {
+            observer.observe(oc2Container, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['class', 'style']
+            });
+        }
+
+        // Also observe body for SPA navigation and late OC2 injection
         observer.observe(document.body, {
             childList: true,
             subtree: true
         });
+
+        // Periodic re-check for OC2 elements (OC2 toggles display without triggering mutations)
+        setInterval(runAllChecks, 3000);
     }
 
     // Start when page is ready
