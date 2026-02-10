@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      1.9
+// @version      2.0
 // @description  Highlights low success OC participants, stalled OCs, and missing items
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -121,7 +121,7 @@
         element.dataset.ocHighlighted = '';
     }
 
-    // Highlight stalled OC crime cards
+    // Highlight stalled OC crime cards (native view)
     function highlightStalledOCs() {
         const crimeCards = document.querySelectorAll('[data-oc-id]');
 
@@ -134,6 +134,30 @@
                 console.log(`Stalled OC: ${card.getAttribute('data-oc-id')}`);
             } else if (!paused && currentTag === 'stalled') {
                 clearHighlight(card);
+            }
+        });
+    }
+
+    // Highlight stalled OC rows in OC2 table view
+    function highlightStalledOC2Rows() {
+        const crimeRows = document.querySelectorAll('.OC2-crimeLi');
+
+        crimeRows.forEach(row => {
+            const countdownText = row.querySelector('.OC2-countdownText');
+            if (!countdownText) return;
+
+            const hasDelay = countdownText.textContent.includes('Delay');
+            const currentTag = row.dataset.ocHighlighted;
+
+            if (hasDelay && currentTag !== 'stalled') {
+                row.style.setProperty('background-color', 'rgba(255, 136, 0, 0.3)', 'important');
+                row.style.setProperty('border-left', '4px solid #ff8800', 'important');
+                row.dataset.ocHighlighted = 'stalled';
+                console.log(`Stalled OC2 row: ${row.className}`);
+            } else if (!hasDelay && currentTag === 'stalled') {
+                row.style.removeProperty('background-color');
+                row.style.removeProperty('border-left');
+                row.dataset.ocHighlighted = '';
             }
         });
     }
@@ -192,14 +216,12 @@
 
     // Highlight unavailable members in the OC2 table view
     function highlightUnavailableMembers() {
-        // Find full crimes that have a Delay countdown (stalled due to unavailable members)
-        const crimeRows = document.querySelectorAll('.OC2-crimeFull');
+        // Find ALL crime rows (both recruiting and full) that have a Delay countdown
+        const crimeRows = document.querySelectorAll('.OC2-crimeLi');
 
         crimeRows.forEach(crimeRow => {
             // Check if this crime has a delay
-            const countdownCell = crimeRow.querySelector('.OC2-tableCountdown');
-            if (!countdownCell) return;
-            const countdownText = countdownCell.querySelector('.OC2-countdownText');
+            const countdownText = crimeRow.querySelector('.OC2-countdownText');
             if (!countdownText || !countdownText.textContent.includes('Delay')) return;
 
             // Get the crime ID from the class name
@@ -211,14 +233,19 @@
             const memberRows = document.querySelectorAll(`.OC2-crimeMemberLi.OC2-crimeID_${crimeId}`);
 
             memberRows.forEach(memberRow => {
-                const statusEl = memberRow.querySelector('.OC2-statusText:not([style*="display: none"])');
-                if (!statusEl) return;
-
-                const isUnavailable = statusEl.classList.contains('hospital') ||
-                    statusEl.classList.contains('traveling') ||
-                    statusEl.classList.contains('jail') ||
-                    statusEl.classList.contains('federal') ||
-                    statusEl.classList.contains('abroad');
+                // Check visible status text (OC2 has two: one hidden short, one visible long)
+                const statusEls = memberRow.querySelectorAll('.OC2-statusText');
+                let isUnavailable = false;
+                for (const el of statusEls) {
+                    if (el.classList.contains('hospital') ||
+                        el.classList.contains('traveling') ||
+                        el.classList.contains('jail') ||
+                        el.classList.contains('federal') ||
+                        el.classList.contains('abroad')) {
+                        isUnavailable = true;
+                        break;
+                    }
+                }
 
                 if (isUnavailable && memberRow.dataset.ocHighlighted !== 'unavailable') {
                     memberRow.style.setProperty('background-color', UNAVAILABLE_BG, 'important');
@@ -226,8 +253,7 @@
                     memberRow.dataset.ocHighlighted = 'unavailable';
                     const nameEl = memberRow.querySelector('.OC2-tableCrimeMemberName a');
                     const name = nameEl ? nameEl.textContent.trim() : 'Unknown';
-                    const status = statusEl.textContent.trim();
-                    console.log(`Unavailable member: ${name} - ${status} (Crime ${crimeId})`);
+                    console.log(`Unavailable member: ${name} (Crime ${crimeId})`);
                 } else if (!isUnavailable && memberRow.dataset.ocHighlighted === 'unavailable') {
                     memberRow.style.removeProperty('background-color');
                     memberRow.style.removeProperty('border-left');
@@ -240,6 +266,7 @@
     // Run all checks
     function runAllChecks() {
         highlightStalledOCs();
+        highlightStalledOC2Rows();
         highlightSlotIssues();
         highlightUnavailableMembers();
     }
