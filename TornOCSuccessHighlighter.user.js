@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      2.1
+// @version      2.2
 // @description  Highlights low success OC participants, stalled OCs, and missing items
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -33,9 +33,19 @@
     const MISSING_ITEM_OUTLINE = '2px solid #dd66ff';
     const MISSING_ITEM_BOX_SHADOW = '0 0 10px 3px rgba(170, 0, 255, 0.8)';
 
-    // Unavailable member styling (cyan) - for OC2 table view
-    const UNAVAILABLE_BG = 'rgba(255, 50, 50, 0.25)';
-    const UNAVAILABLE_BORDER_LEFT = '4px solid #ff4444';
+    // Inject CSS for OC2 highlighting (survives OC2 style overwrites)
+    const style = document.createElement('style');
+    style.textContent = `
+        .oc-highlight-stalled {
+            background-color: rgba(255, 136, 0, 0.3) !important;
+            border-left: 4px solid #ff8800 !important;
+        }
+        .oc-highlight-unavailable {
+            background-color: rgba(255, 50, 50, 0.25) !important;
+            border-left: 4px solid #ff4444 !important;
+        }
+    `;
+    document.head.appendChild(style);
 
     // Find the crime level for a slot element by traversing up to find the crime card
     function getCrimeLevel(slotElement) {
@@ -147,17 +157,14 @@
             if (!countdownText) return;
 
             const hasDelay = countdownText.textContent.includes('Delay');
-            const currentTag = row.dataset.ocHighlighted;
 
-            if (hasDelay && currentTag !== 'stalled') {
-                row.style.setProperty('background-color', 'rgba(255, 136, 0, 0.3)', 'important');
-                row.style.setProperty('border-left', '4px solid #ff8800', 'important');
-                row.dataset.ocHighlighted = 'stalled';
-                console.log(`Stalled OC2 row: ${row.className}`);
-            } else if (!hasDelay && currentTag === 'stalled') {
-                row.style.removeProperty('background-color');
-                row.style.removeProperty('border-left');
-                row.dataset.ocHighlighted = '';
+            if (hasDelay) {
+                if (!row.classList.contains('oc-highlight-stalled')) {
+                    row.classList.add('oc-highlight-stalled');
+                    console.log(`Stalled OC2 row: ${row.className}`);
+                }
+            } else {
+                row.classList.remove('oc-highlight-stalled');
             }
         });
     }
@@ -233,7 +240,7 @@
             const memberRows = document.querySelectorAll(`.OC2-crimeMemberLi.OC2-crimeID_${crimeId}`);
 
             memberRows.forEach(memberRow => {
-                // Check visible status text (OC2 has two: one hidden short, one visible long)
+                // Check ALL status text elements for unavailable statuses
                 const statusEls = memberRow.querySelectorAll('.OC2-statusText');
                 let isUnavailable = false;
                 for (const el of statusEls) {
@@ -247,17 +254,15 @@
                     }
                 }
 
-                if (isUnavailable && memberRow.dataset.ocHighlighted !== 'unavailable') {
-                    memberRow.style.setProperty('background-color', UNAVAILABLE_BG, 'important');
-                    memberRow.style.setProperty('border-left', UNAVAILABLE_BORDER_LEFT, 'important');
-                    memberRow.dataset.ocHighlighted = 'unavailable';
-                    const nameEl = memberRow.querySelector('.OC2-tableCrimeMemberName a');
-                    const name = nameEl ? nameEl.textContent.trim() : 'Unknown';
-                    console.log(`Unavailable member: ${name} (Crime ${crimeId})`);
-                } else if (!isUnavailable && memberRow.dataset.ocHighlighted === 'unavailable') {
-                    memberRow.style.removeProperty('background-color');
-                    memberRow.style.removeProperty('border-left');
-                    memberRow.dataset.ocHighlighted = '';
+                if (isUnavailable) {
+                    if (!memberRow.classList.contains('oc-highlight-unavailable')) {
+                        memberRow.classList.add('oc-highlight-unavailable');
+                        const nameEl = memberRow.querySelector('.OC2-tableCrimeMemberName a');
+                        const name = nameEl ? nameEl.textContent.trim() : 'Unknown';
+                        console.log(`Unavailable member: ${name} (Crime ${crimeId})`);
+                    }
+                } else {
+                    memberRow.classList.remove('oc-highlight-unavailable');
                 }
             });
         });
