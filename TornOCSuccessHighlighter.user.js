@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      2.4
+// @version      2.5
 // @description  Highlights low success OC participants, stalled OCs, and missing items
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -33,9 +33,7 @@
     const MISSING_ITEM_OUTLINE = '2px solid #dd66ff';
     const MISSING_ITEM_BOX_SHADOW = '0 0 10px 3px rgba(170, 0, 255, 0.8)';
 
-    // OC2 inline style values (reapplied every cycle)
-    const STALLED_OC2_STYLES = 'background-color: rgba(255, 136, 0, 0.3) !important; border-left: 4px solid #ff8800 !important;';
-    const UNAVAILABLE_OC2_STYLES = 'background-color: rgba(255, 50, 50, 0.25) !important; border-left: 4px solid #ff4444 !important;';
+    // OC2 style application (reapplied every cycle via setProperty)
 
     // Find the crime level for a slot element by traversing up to find the crime card
     function getCrimeLevel(slotElement) {
@@ -138,21 +136,6 @@
         });
     }
 
-    // Apply OC2 styles by appending to existing style attribute
-    function applyOC2Style(element, extraStyles) {
-        const current = element.getAttribute('style') || '';
-        // Remove any previous OC highlighter styles
-        const cleaned = current.replace(/\/\*och\*\/.*?\/\*\/och\*\//g, '').trim();
-        // Append our styles wrapped in markers
-        element.setAttribute('style', cleaned + ' /*och*/' + extraStyles + '/*/och*/');
-    }
-
-    function clearOC2Style(element) {
-        const current = element.getAttribute('style') || '';
-        const cleaned = current.replace(/\/\*och\*\/.*?\/\*\/och\*\//g, '').trim();
-        element.setAttribute('style', cleaned);
-    }
-
     // Highlight stalled OC rows in OC2 table view
     function highlightStalledOC2Rows() {
         const crimeRows = document.querySelectorAll('[class*="OC2-crimeLi"]');
@@ -161,7 +144,8 @@
             const hasDelay = row.textContent.includes('Delay:') || row.textContent.includes('Delay ');
 
             if (hasDelay && row.className.includes('OC2-crimeID_')) {
-                applyOC2Style(row, STALLED_OC2_STYLES);
+                row.style.setProperty('background-color', 'rgba(255, 136, 0, 0.3)', 'important');
+                row.style.setProperty('border-left', '4px solid #ff8800', 'important');
             }
         });
     }
@@ -236,7 +220,8 @@
                 statusText.includes('flying');
 
             if (isUnavailable) {
-                applyOC2Style(memberRow, UNAVAILABLE_OC2_STYLES);
+                memberRow.style.setProperty('background-color', 'rgba(255, 50, 50, 0.25)', 'important');
+                memberRow.style.setProperty('border-left', '4px solid #ff4444', 'important');
             }
         });
     }
