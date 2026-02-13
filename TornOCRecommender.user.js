@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      1.3
+// @version      1.4
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -87,6 +87,29 @@
         return filled;
     }
 
+    // Get time remaining on an OC's countdown timer (DD:HH:MM:SS format)
+    // Returns total seconds remaining, or Infinity if no timer found
+    function getTimeRemaining(crimeCard) {
+        if (!crimeCard) return Infinity;
+        const text = crimeCard.textContent;
+        const match = text.match(/(\d+):(\d{2}):(\d{2}):(\d{2})/);
+        if (!match) return Infinity;
+        const days = parseInt(match[1], 10);
+        const hours = parseInt(match[2], 10);
+        const minutes = parseInt(match[3], 10);
+        const seconds = parseInt(match[4], 10);
+        return days * 86400 + hours * 3600 + minutes * 60 + seconds;
+    }
+
+    // Format seconds back to readable time for logging
+    function formatTime(totalSeconds) {
+        if (totalSeconds === Infinity) return 'no timer';
+        const d = Math.floor(totalSeconds / 86400);
+        const h = Math.floor((totalSeconds % 86400) / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        return `${d}d ${h}h ${m}m`;
+    }
+
     // Get success rate from slot
     function getSuccessRate(slotElement) {
         const successEl = slotElement.querySelector('[class*="successChance___"]');
@@ -132,6 +155,7 @@
             if (level === null || successRate === null) return;
 
             const filledSlots = getFilledSlotCount(crimeCard);
+            const timeRemaining = getTimeRemaining(crimeCard);
 
             joinableSlots.push({
                 element: slot,
@@ -141,6 +165,7 @@
                 crimeName: crimeName,
                 roleName: roleName,
                 filledSlots: filledSlots,
+                timeRemaining: timeRemaining,
                 meetsThreshold: meetsThreshold(level, successRate)
             });
         });
@@ -162,14 +187,17 @@
         const anyLevel2to6Meet70 = slots.some(s => s.level >= 2 && s.level <= 6 && s.successRate >= THRESHOLD_LEVEL_2_6);
 
         if (level7PlusSlots.length > 0 && anyLevel2to6Meet70) {
-            // Sort: prefer 60%+ first, then by level desc, then if close enough prefer filled, then success rate
+            // Sort: prefer 60%+ first, then level desc, then if close enough prefer urgency, then success rate
             level7PlusSlots.sort((a, b) => {
                 const aPreferred = a.successRate >= PREFERRED_LEVEL_7_PLUS ? 1 : 0;
                 const bPreferred = b.successRate >= PREFERRED_LEVEL_7_PLUS ? 1 : 0;
                 if (bPreferred !== aPreferred) return bPreferred - aPreferred;
                 if (b.level !== a.level) return b.level - a.level;
                 const closeEnough = Math.abs(a.successRate - b.successRate) <= CLOSE_ENOUGH_PCT;
-                if (closeEnough && b.filledSlots !== a.filledSlots) return b.filledSlots - a.filledSlots;
+                if (closeEnough) {
+                    if (a.timeRemaining !== b.timeRemaining) return a.timeRemaining - b.timeRemaining;
+                    if (b.filledSlots !== a.filledSlots) return b.filledSlots - a.filledSlots;
+                }
                 return b.successRate - a.successRate;
             });
             results = level7PlusSlots;
@@ -184,7 +212,10 @@
                 qualifyingSlots.sort((a, b) => {
                     if (b.level !== a.level) return b.level - a.level;
                     const closeEnough = Math.abs(a.successRate - b.successRate) <= CLOSE_ENOUGH_PCT;
-                    if (closeEnough && b.filledSlots !== a.filledSlots) return b.filledSlots - a.filledSlots;
+                    if (closeEnough) {
+                        if (a.timeRemaining !== b.timeRemaining) return a.timeRemaining - b.timeRemaining;
+                        if (b.filledSlots !== a.filledSlots) return b.filledSlots - a.filledSlots;
+                    }
                     return b.successRate - a.successRate;
                 });
                 results = qualifyingSlots;
@@ -197,7 +228,10 @@
             if (level1Slots.length > 0) {
                 level1Slots.sort((a, b) => {
                     const closeEnough = Math.abs(a.successRate - b.successRate) <= CLOSE_ENOUGH_PCT;
-                    if (closeEnough && b.filledSlots !== a.filledSlots) return b.filledSlots - a.filledSlots;
+                    if (closeEnough) {
+                        if (a.timeRemaining !== b.timeRemaining) return a.timeRemaining - b.timeRemaining;
+                        if (b.filledSlots !== a.filledSlots) return b.filledSlots - a.filledSlots;
+                    }
                     return b.successRate - a.successRate;
                 });
                 results = level1Slots;
@@ -289,11 +323,11 @@
         const { primary, secondary } = findRecommendedOCs(joinableSlots);
 
         if (primary) {
-            console.log(`Torn OC Recommender: Best OC is Level ${primary.level} "${primary.crimeName}" - ${primary.roleName} (${primary.successRate}%, ${primary.filledSlots} filled)`);
+            console.log(`Torn OC Recommender: Best OC is Level ${primary.level} "${primary.crimeName}" - ${primary.roleName} (${primary.successRate}%, ${primary.filledSlots} filled, ${formatTime(primary.timeRemaining)} left)`);
             applyRecommendation(primary, true);
 
             secondary.forEach(slot => {
-                console.log(`Torn OC Recommender: Also recommended: Level ${slot.level} "${slot.crimeName}" - ${slot.roleName} (${slot.successRate}%, ${slot.filledSlots} filled)`);
+                console.log(`Torn OC Recommender: Also recommended: Level ${slot.level} "${slot.crimeName}" - ${slot.roleName} (${slot.successRate}%, ${slot.filledSlots} filled, ${formatTime(slot.timeRemaining)} left)`);
                 applyRecommendation(slot, false);
             });
         } else {
