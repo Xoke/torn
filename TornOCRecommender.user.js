@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      1.4
+// @version      1.5
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -123,6 +123,36 @@
     function getRoleName(slotElement) {
         const titleEl = slotElement.querySelector('[class*="title___"]');
         return titleEl ? titleEl.textContent.trim() : 'Unknown Role';
+    }
+
+    // Get the current player's name from the page header
+    function getCurrentPlayerName() {
+        const nameLabel = document.querySelector('[class*="menu-name___"]');
+        if (nameLabel && nameLabel.parentElement) {
+            const honorText = nameLabel.parentElement.querySelector('.honor-text');
+            if (honorText) return honorText.textContent.trim();
+        }
+        return null;
+    }
+
+    // Check if the current player is already in any OC
+    function isPlayerInOC() {
+        const playerName = getCurrentPlayerName();
+        if (!playerName) return false;
+
+        const crimeCards = document.querySelectorAll('[data-oc-id]');
+        for (const card of crimeCards) {
+            const slots = card.querySelectorAll('[class*="wrapper___"][class*="success"]');
+            for (const slot of slots) {
+                if (!slot.querySelector('[class*="slotHeader___"]')) continue;
+                if (isEmptySlot(slot)) continue;
+                const honorTexts = slot.querySelectorAll('.honor-text');
+                for (const ht of honorTexts) {
+                    if (ht.textContent.trim() === playerName) return true;
+                }
+            }
+        }
+        return false;
     }
 
     // Check if slot meets threshold for its level
@@ -310,6 +340,11 @@
     // Main function
     function updateRecommendations() {
         clearRecommendations();
+
+        if (isPlayerInOC()) {
+            console.log('Torn OC Recommender: Already in an OC, skipping recommendations');
+            return;
+        }
 
         const joinableSlots = analyzeJoinableSlots();
 
