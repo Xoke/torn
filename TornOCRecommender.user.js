@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      1.5
+// @version      1.6
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -127,6 +127,21 @@
 
     // Get the current player's name from the page header
     function getCurrentPlayerName() {
+        // Try user-information sidebar: <span class="bold">Name:</span> followed by text
+        const userInfo = document.querySelector('.user-information');
+        if (userInfo) {
+            const spans = userInfo.querySelectorAll('span.bold');
+            for (const span of spans) {
+                if (span.textContent.trim() === 'Name:') {
+                    const li = span.parentElement;
+                    if (li) {
+                        const name = li.textContent.replace('Name:', '').trim();
+                        if (name) return name;
+                    }
+                }
+            }
+        }
+        // Fallback: try menu-name style header
         const nameLabel = document.querySelector('[class*="menu-name___"]');
         if (nameLabel && nameLabel.parentElement) {
             const honorText = nameLabel.parentElement.querySelector('.honor-text');
@@ -136,10 +151,7 @@
     }
 
     // Check if the current player is already in any OC
-    function isPlayerInOC() {
-        const playerName = getCurrentPlayerName();
-        if (!playerName) return false;
-
+    function isPlayerInOC(playerName) {
         const crimeCards = document.querySelectorAll('[data-oc-id]');
         for (const card of crimeCards) {
             const slots = card.querySelectorAll('[class*="wrapper___"][class*="success"]');
@@ -341,8 +353,9 @@
     function updateRecommendations() {
         clearRecommendations();
 
-        if (isPlayerInOC()) {
-            console.log('Torn OC Recommender: Already in an OC, skipping recommendations');
+        const playerName = getCurrentPlayerName();
+        if (playerName && isPlayerInOC(playerName)) {
+            console.log(`Torn OC Recommender: ${playerName} is already in an OC, skipping recommendations`);
             return;
         }
 
