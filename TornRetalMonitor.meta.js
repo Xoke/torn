@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Torn Ranked War Retal Monitor
-// @namespace    http://tampermonkey.net/
-// @version      1.3
+// @namespace    https://xoke.org/
+// @version      1.4
 // @description  Monitors faction attacks to identify retaliation opportunities during ranked wars
-// @author       Your Name
+// @author       Xoke
 // @match        https://www.torn.com/*
 // @match        https://www.tornpda.com/*
+// @run-at       document-end
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle

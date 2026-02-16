@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Torn Ranked War Target Finder
 // @namespace    https://xoke.org/
-// @version      8.2
+// @version      8.3
 // @description  Find optimal targets for ranked wars with FF integration and chain monitoring
 // @author       Xoke
 // @match        https://www.torn.com/*
 // @homepageURL  https://github.com/Xoke/torn
 // @updateURL    https://raw.githubusercontent.com/Xoke/torn/main/TornRankedWarTargetFinder.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Xoke/torn/main/TornRankedWarTargetFinder.user.js
+// @run-at       document-end
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -15,6 +16,36 @@
 
 (function() {
     'use strict';
+
+    var DEBUG = false;
+
+    function debugLog() {
+        if (DEBUG) console.log.apply(console, ['[Torn War Targets]'].concat(Array.prototype.slice.call(arguments)));
+    }
+
+    function debugError() {
+        if (DEBUG) console.error.apply(console, ['[Torn War Targets]'].concat(Array.prototype.slice.call(arguments)));
+    }
+
+    // Show non-blocking notification instead of alert()
+    function showNotification(message, type) {
+        type = type || 'info';
+        var notification = document.createElement('div');
+        notification.className = 'torn-war-notification';
+        notification.textContent = message;
+        notification.style.cssText =
+            'position: fixed; top: 20px; right: 20px; z-index: 10000;' +
+            'padding: 15px 20px; border-radius: 5px;' +
+            'background: ' + (type === 'error' ? '#c43b3b' : type === 'warning' ? '#b8860b' : '#2d6e2d') + ';' +
+            'color: white; font-weight: bold;' +
+            'box-shadow: 0 2px 10px rgba(0,0,0,0.3);' +
+            'transition: opacity 0.3s;';
+        document.body.appendChild(notification);
+        setTimeout(function() {
+            notification.style.opacity = '0';
+            setTimeout(function() { notification.remove(); }, 300);
+        }, 4000);
+    }
 
     // Configuration Constants
     var API_DELAY = 5000; // 5 seconds - very conservative (Torn allows 100 calls/min)
@@ -25,6 +56,19 @@
     var OFFLINE_THRESHOLD_MINS = 10;
     var HOSP_SOON_SECONDS = 300; // 5 minutes
     var MAX_API_RETRIES = 3;
+
+    // Pre-compiled regex patterns
+    var REGEX = {
+        API_KEY: /^[a-zA-Z0-9]{16}$/,
+        FACTION_ID: /^\d+$/,
+        FOREIGN_HOSPITAL: /in an? .+ hospital/i,
+        LEVEL_NUMBER: /^\d+$/,
+        FAIR_FIGHT: /(\d+\.\d{1,3})/,
+        TIME_FORMAT: /^\d+[smhd]$/,
+        BATTLE_STATS: /(\d+\.?\d*)([kmb]?)/,
+        HOSPITAL_TIME: /(\d+)\s*(second|sec|minute|min|hour|hr)/i,
+        USER_ID: /XID=(\d+)/
+    };
 
     // Storage Keys
     var STORAGE_KEY = 'tornWarTargets';
@@ -41,7 +85,7 @@
     var filterCache = null; // Cache DOM element references
     var retryCount = 0; // API retry counter
 
-    console.log('[Torn War Targets] Script initialized');
+    debugLog('Script initialized');
 
     // Helper function for debouncing
     function debounce(func, wait) {
@@ -70,14 +114,14 @@
     function validateApiKey(key) {
         if (!key) return false;
         var cleaned = String(key).trim();
-        return /^[a-zA-Z0-9]{16}$/.test(cleaned);
+        return REGEX.API_KEY.test(cleaned);
     }
 
     // Validate faction ID (numeric only)
     function validateFactionId(id) {
         if (!id) return false;
         var cleaned = String(id).trim();
-        return /^\d+$/.test(cleaned) && parseInt(cleaned) > 0;
+        return REGEX.FACTION_ID.test(cleaned) && parseInt(cleaned) > 0;
     }
 
     // Helper function to update status message
@@ -96,7 +140,7 @@
         var description = (status && status.description) || 'Unknown';
 
         // Detect foreign hospital (treat as traveling)
-        if (state === 'hospital' && description.match(/in an? .+ hospital/i)) {
+        if (state === 'hospital' && REGEX.FOREIGN_HOSPITAL.test(description)) {
             return 'traveling';
         }
 
@@ -127,11 +171,11 @@
             })
             .catch(function(error) {
                 if (error.name === 'AbortError') {
-                    console.error('[Torn War Targets] Request timeout after', FETCH_TIMEOUT / 1000, 'seconds');
+                    debugError('Request timeout after', FETCH_TIMEOUT / 1000, 'seconds');
                     updateStatus('❌ Request timeout', 'error');
                     throw new Error('Request timeout');
                 }
-                console.error('[Torn War Targets] Fetch error:', error);
+                debugError('Fetch error:', error);
                 updateStatus('❌ Error: ' + error.message, 'error');
                 throw error;
             })
@@ -145,10 +189,18 @@
         if (!targetsCache) {
             try {
                 var stored = GM_getValue(STORAGE_KEY, '[]');
-                targetsCache = JSON.parse(stored);
+                var parsed = JSON.parse(stored);
+                if (!Array.isArray(parsed)) {
+                    debugError('Invalid cache format (not array), resetting');
+                    targetsCache = [];
+                    GM_setValue(STORAGE_KEY, '[]');
+                } else {
+                    targetsCache = parsed;
+                }
             } catch (e) {
-                console.error('[Torn War Targets] Parse error:', e);
+                debugError('Parse error:', e);
                 targetsCache = [];
+                GM_setValue(STORAGE_KEY, '[]');
             }
         }
         return targetsCache;
@@ -266,7 +318,7 @@
         var membersTable = document.querySelector('.members-list');
 
         if (!membersTable) {
-            alert('Could not find faction members table.');
+            showNotification('Could not find faction members table.', 'error');
             if (button) {
                 button.disabled = false;
                 button.textContent = '⚔️ Load War Targets';
@@ -284,7 +336,7 @@
             if (!memberLink) continue;
 
             var name = memberLink.textContent.trim();
-            var idMatch = memberLink.href.match(/XID=(\d+)/);
+            var idMatch = memberLink.href.match(REGEX.USER_ID);
             var userId = idMatch ? idMatch[1] : null;
             if (!userId) continue;
 
@@ -292,7 +344,7 @@
             var levelElements = row.querySelectorAll('.lvl');
             for (var j = 0; j < levelElements.length; j++) {
                 var levelText = levelElements[j].textContent.trim();
-                if (levelText.match(/^\d+$/) && !levelText.includes('FF')) {
+                if (REGEX.LEVEL_NUMBER.test(levelText) && !levelText.includes('FF')) {
                     level = parseInt(levelText);
                     break;
                 }
@@ -311,7 +363,7 @@
             var ffElements = row.querySelectorAll('.ff, [class*="ff-scouter"]');
             for (var k = 0; k < ffElements.length; k++) {
                 var ffText = ffElements[k].textContent.trim();
-                var ffMatch = ffText.match(/(\d+\.\d{1,3})/);
+                var ffMatch = ffText.match(REGEX.FAIR_FIGHT);
                 if (ffMatch) {
                     var value = parseFloat(ffMatch[1]);
                     if (value >= 1.0 && value <= 5.0) {
@@ -347,7 +399,7 @@
             var timeElements = row.querySelectorAll('[class*="time"], .last-action');
             for (var m = 0; m < timeElements.length; m++) {
                 var text = timeElements[m].textContent.trim();
-                if (text.match(/^\d+[smhd]$/)) {
+                if (REGEX.TIME_FORMAT.test(text)) {
                     lastActionText = text;
                     break;
                 }
@@ -365,11 +417,11 @@
         }
 
         if (targets.length === 0) {
-            alert('Could not find member data.');
+            showNotification('Could not find member data.', 'error');
             return;
         }
 
-        console.log('[Torn War Targets] Scraped', targets.length, 'targets from faction page');
+        debugLog('Scraped', targets.length, 'targets from faction page');
         saveTargets(targets);
         GM_setValue('scrapedFactionId', factionId);
 
@@ -541,7 +593,7 @@
 
         var targets = getCachedTargets();
         if (targets && targets.length > 0) {
-            console.log('[Torn War Targets] Loaded', targets.length, 'cached targets');
+            debugLog('Loaded', targets.length, 'cached targets');
             document.getElementById('loading-status').textContent = 'Loaded ' + targets.length + ' cached targets';
             displayTargets(targets);
 
@@ -554,13 +606,13 @@
     function saveApiKey() {
         var apiKey = document.getElementById('api-key').value.trim();
         if (!apiKey) {
-            alert('Please enter an API key');
+            showNotification('Please enter an API key', 'warning');
             return;
         }
 
         // Validate format before making API call
         if (!validateApiKey(apiKey)) {
-            alert('Invalid API key format. Must be 16 alphanumeric characters.');
+            showNotification('Invalid API key format. Must be 16 alphanumeric characters.', 'error');
             return;
         }
 
@@ -573,7 +625,7 @@
         safeFetch('https://api.torn.com/user/?selections=basic&key=' + encodeURIComponent(apiKey))
             .then(function(data) {
                 if (data.error) {
-                    alert('Invalid API key: ' + data.error.error);
+                    showNotification('Invalid API key: ' + data.error.error, 'error');
                     if (statusEl) {
                         statusEl.textContent = '❌ Invalid API key';
                         statusEl.style.color = '#ff4444';
@@ -581,14 +633,14 @@
                     return;
                 }
                 GM_setValue('apiKey', apiKey);
-                alert('API key validated and saved successfully!');
+                showNotification('API key validated and saved successfully!');
                 if (statusEl) {
                     statusEl.textContent = '✅ API key validated for ' + escapeHtml(data.name);
                     statusEl.style.color = '#44ff44';
                 }
             })
             .catch(function(error) {
-                console.error('[Torn War Targets] API key validation failed');
+                debugError('API key validation failed');
                 // Error message already shown by safeFetch
             });
     }
@@ -598,13 +650,13 @@
         var factionId = document.getElementById('faction-id').value.trim();
 
         if (!apiKey || !factionId) {
-            alert('Need API key and faction ID');
+            showNotification('Need API key and faction ID', 'warning');
             return;
         }
 
         // Validate faction ID
         if (!validateFactionId(factionId)) {
-            alert('Invalid faction ID. Must be numeric.');
+            showNotification('Invalid faction ID. Must be numeric.', 'error');
             return;
         }
 
@@ -613,15 +665,15 @@
         safeFetch('https://api.torn.com/faction/' + encodeURIComponent(factionId) + '?selections=basic&key=' + encodeURIComponent(apiKey))
             .then(function(data) {
                 if (data.error) {
-                    alert('Error: ' + data.error.error);
+                    showNotification('Error: ' + data.error.error, 'error');
                     document.getElementById('loading-status').textContent = '❌ API Error: ' + data.error.error;
                     document.getElementById('loading-status').style.color = '#ff4444';
                     return;
                 }
                 var members = Object.values(data.members);
                 if (members.length === 0) {
-                    console.log('[Torn War Targets] Warning: Faction has no members');
-                    alert('Warning: This faction has no members');
+                    debugLog('Warning: Faction has no members');
+                    showNotification('Warning: This faction has no members', 'warning');
                     document.getElementById('loading-status').textContent = '⚠️ Faction has no members';
                     document.getElementById('loading-status').style.color = '#ffaa00';
                     return;
@@ -633,7 +685,7 @@
                         last_action: { timestamp: 0 }, fairFight: null, estimate: null
                     };
                 });
-                console.log('[Torn War Targets] Loaded', targets.length, 'targets from API');
+                debugLog('Loaded', targets.length, 'targets from API');
                 saveTargets(targets);
                 document.getElementById('loading-status').textContent = 'Loaded ' + targets.length + ' targets from API';
                 document.getElementById('loading-status').style.color = '#44ff44';
@@ -641,14 +693,14 @@
             })
             .catch(function(error) {
                 // Error already handled by safeFetch
-                console.error('[Torn War Targets] Failed to load faction targets:', error);
+                debugError('Failed to load faction targets:', error);
             });
     }
 
     function parseBattleStats(text) {
         if (!text) return 0;
         var clean = text.toLowerCase().replace(/[",\s]/g, '');
-        var match = clean.match(/(\d+\.?\d*)([kmb]?)/);
+        var match = clean.match(REGEX.BATTLE_STATS);
         if (!match) return 0;
         var num = parseFloat(match[1]);
         var suf = match[2];
@@ -660,7 +712,7 @@
 
     function getHospitalSeconds(statusDesc) {
         if (!statusDesc) return 999999; // Unknown hospital time goes to end
-        var hospMatch = statusDesc.match(/(\d+)\s*(second|sec|minute|min|hour|hr)/i);
+        var hospMatch = statusDesc.match(REGEX.HOSPITAL_TIME);
         if (!hospMatch) return 999999;
         var hospVal = parseInt(hospMatch[1]);
         var hospUnit = hospMatch[2].toLowerCase();
@@ -735,14 +787,14 @@
                                currentOrder.some(function(id, idx) { return id !== newOrder[idx]; });
 
             if (orderChanged) {
-                console.log('[Torn War Targets] Sort order changed, rebuilding table');
+                debugLog('Sort order changed, rebuilding table');
                 buildNewTable(container, filtered, now);
                 // Apply filters immediately after rebuild to prevent flicker
                 doFilterTargets();
                 return; // Don't call doFilterTargets again at the end
             } else {
                 // Update existing rows instead of rebuilding the entire table
-                console.log('[Torn War Targets] Updating existing table rows');
+                debugLog('Updating existing table rows');
                 updateExistingTable(existingTable, filtered, now);
                 // Use debounced filter for smooth updates
                 filterTargets();
@@ -750,7 +802,7 @@
             }
         } else {
             // First render - build the table from scratch
-            console.log('[Torn War Targets] Building initial table');
+            debugLog('Building initial table');
             buildNewTable(container, filtered, now);
         }
 
@@ -810,9 +862,8 @@
                 statusCell.setAttribute('data-status-state', rowData.statusState);
                 statusCell.textContent = rowData.statusDesc;
 
-                // Debug: log ALL hospital status updates that changed
                 if (rowData.statusState === 'hospital' && oldStatus !== rowData.statusDesc) {
-                    console.log('[Torn War Targets] Hospital status CHANGED:',
+                    debugLog('Hospital status CHANGED:',
                                 target.name,
                                 'Old:', oldStatus,
                                 '→ New:', rowData.statusDesc);
@@ -841,7 +892,7 @@
 
         var hospUntil = 0;
         if (statusState === 'hospital' && statusDesc) {
-            var hospMatch = statusDesc.match(/(\d+)\s*(second|sec|minute|min|hour|hr)/i);
+            var hospMatch = statusDesc.match(REGEX.HOSPITAL_TIME);
             if (hospMatch) {
                 var hospVal = parseInt(hospMatch[1]);
                 var hospUnit = hospMatch[2].toLowerCase();
@@ -964,15 +1015,20 @@
         var factionId = GM_getValue('scrapedFactionId', '');
         if (!apiKey || !factionId) {
             document.getElementById('auto-refresh').checked = false;
-            console.log('[Torn War Targets] Auto-refresh disabled: missing API key or faction ID');
+            debugLog('Auto-refresh disabled: missing API key or faction ID');
             return;
         }
 
-        console.log('[Torn War Targets] Auto-refresh started (every', API_DELAY / 1000, 'seconds)');
+        debugLog('Auto-refresh started (every', API_DELAY / 1000, 'seconds)');
 
         function doRefresh() {
+            if (!document.getElementById('targets-list')) {
+                debugLog('Targets page not visible, stopping refresh');
+                stopAutoRefresh();
+                return;
+            }
             if (refreshInProgress) {
-                console.log('[Torn War Targets] Skipping refresh - previous refresh still in progress');
+                debugLog('Skipping refresh - previous refresh still in progress');
                 return;
             }
             refreshInProgress = true;
@@ -990,7 +1046,7 @@
         if (refreshInterval) {
             clearInterval(refreshInterval);
             refreshInterval = null;
-            console.log('[Torn War Targets] Auto-refresh stopped');
+            debugLog('Auto-refresh stopped');
         }
     }
 
@@ -999,7 +1055,7 @@
             .then(function(data) {
                 if (data.error) {
                     var errorCode = data.error.code;
-                    console.error('[Torn War Targets] API error during refresh:', data.error.error, '(code:', errorCode + ')');
+                    debugError('API error during refresh:', data.error.error, '(code:', errorCode + ')');
 
                     // Check if this is a permanent error (invalid key or access denied)
                     if (errorCode === 2 || errorCode === 10) {
@@ -1007,14 +1063,14 @@
                         stopAutoRefresh();
                         document.getElementById('auto-refresh').checked = false;
                         updateStatus('Auto-refresh stopped: ' + data.error.error, 'error');
-                        alert('Auto-refresh stopped due to permanent API error: ' + data.error.error);
+                        showNotification('Auto-refresh stopped: ' + data.error.error, 'error');
                         return Promise.reject(new Error('Permanent API error'));
                     }
 
                     // Transient error - increment retry counter
                     retryCount++;
                     if (retryCount <= MAX_API_RETRIES) {
-                        console.log('[Torn War Targets] Transient API error, will retry on next interval (attempt', retryCount, 'of', MAX_API_RETRIES + ')');
+                        debugLog('Transient API error, will retry on next interval (attempt', retryCount, 'of', MAX_API_RETRIES + ')');
                         updateStatus('API error, will retry... (' + retryCount + '/' + MAX_API_RETRIES + ')', 'warning');
                         return Promise.reject(new Error('Transient API error - will retry on next interval'));
                     }
@@ -1023,7 +1079,7 @@
                     stopAutoRefresh();
                     document.getElementById('auto-refresh').checked = false;
                     updateStatus('Auto-refresh stopped after ' + MAX_API_RETRIES + ' failed retries', 'error');
-                    alert('Auto-refresh stopped after ' + MAX_API_RETRIES + ' failed retries');
+                    showNotification('Auto-refresh stopped after ' + MAX_API_RETRIES + ' failed retries', 'error');
                     return Promise.reject(new Error('Max retries exceeded'));
                 }
 
@@ -1072,13 +1128,13 @@
                     updateCount++;
                 }
 
-                console.log('[Torn War Targets] Refreshed status for', updateCount, 'targets (' + hospitalCount + ' in hospital)');
+                debugLog('Refreshed status for', updateCount, 'targets (' + hospitalCount + ' in hospital)');
                 saveTargets(targets);
                 displayTargets(targets);
 
                 // Update chain status if available
                 if (data.chain) {
-                    console.log('[Torn War Targets] Chain status:', data.chain);
+                    debugLog('Chain status:', data.chain);
                     displayChainStatus(data.chain);
                 }
 
@@ -1089,7 +1145,7 @@
                 }
             })
             .catch(function(error) {
-                console.error('[Torn War Targets] Refresh failed:', error);
+                debugError('Refresh failed:', error);
                 // Don't stop auto-refresh on network errors, just skip this cycle
             });
     }
@@ -1145,7 +1201,7 @@
             mutationObserver = null;
             clearTimeout(buttonDebounceTimer); // Clear pending debounce
             buttonDebounceTimer = null;
-            console.log('[Torn War Targets] MutationObserver disconnected');
+            debugLog('MutationObserver disconnected');
         }
     }
 
@@ -1163,8 +1219,24 @@
             childList: true,
             subtree: true
         });
-        console.log('[Torn War Targets] MutationObserver active on faction page');
+        debugLog('MutationObserver active on faction page');
     }
+
+    // Clean up when navigating away
+    window.addEventListener('beforeunload', function() {
+        stopAutoRefresh();
+        disconnectFactionObserver();
+    });
+
+    // Pause auto-refresh when page is hidden to save API calls
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden && refreshInterval) {
+            debugLog('Page hidden, pausing auto-refresh');
+            stopAutoRefresh();
+            var autoRefreshEl = document.getElementById('auto-refresh');
+            if (autoRefreshEl) autoRefreshEl.checked = false;
+        }
+    });
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function() {

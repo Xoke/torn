@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Target Manager
-// @namespace    http://tampermonkey.net/
-// @version      4.0
+// @namespace    https://xoke.org/
+// @version      4.1
 // @description  Manages a priority queue of elimination targets with live status updates, smart sorting, and bulk import from enemies/targets lists
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -18,7 +18,17 @@
 (function() {
     'use strict';
 
-    console.log('Torn Target Manager: Initializing...');
+    const DEBUG = false;
+
+    function debugLog() {
+        if (DEBUG) console.log.apply(console, ['[Torn Target Manager]'].concat(Array.prototype.slice.call(arguments)));
+    }
+
+    function debugError() {
+        if (DEBUG) console.error.apply(console, ['[Torn Target Manager]'].concat(Array.prototype.slice.call(arguments)));
+    }
+
+    debugLog('Initializing...');
 
     // Configuration
     const API_DELAY = 3000; // 3 seconds between API calls
@@ -129,10 +139,10 @@
             const stored = GM_getValue(STORAGE_KEY, '[]');
             targetList = JSON.parse(stored);
         } catch (e) {
-            console.error('Parse error:', e);
+            debugError('Parse error:', e);
             targetList = [];
         }
-        console.log(`Loaded ${targetList.length} targets from storage`);
+        debugLog('Loaded', targetList.length, 'targets from storage');
     }
 
     // Save targets to storage
@@ -151,7 +161,7 @@
             const currentTimestamp = GM_getValue(STORAGE_KEY + '_timestamp', '0');
             if (currentTimestamp !== lastTimestamp) {
                 lastTimestamp = currentTimestamp;
-                console.log('Targets updated in another tab, reloading data...');
+                debugLog('Targets updated in another tab, reloading data...');
                 loadSettings();
 
                 // Update sidebar button text if on profile page
@@ -205,7 +215,7 @@
             addProfileButtonToSidebar(container);
 
             sidebar.insertBefore(container, sidebar.firstChild);
-            console.log('Target Manager buttons added to sidebar');
+            debugLog('Target Manager buttons added to sidebar');
         }
     }
 
@@ -277,7 +287,7 @@
 
         // Validate user ID
         if (!validateUserId(userId)) {
-            console.error('Invalid user ID:', userId);
+            debugError('Invalid user ID:', userId);
             if (btn) {
                 btn.textContent = '❌ Invalid ID';
                 setTimeout(() => {
@@ -363,7 +373,7 @@
             if (userName !== `User ${userId}`) existingTarget.name = userName;
             if (userLevel !== '?') existingTarget.level = userLevel;
 
-            console.log(`Updated target ${userId} with FF: ${fairFight}, Stats: ${battleStats}`);
+            debugLog('Updated target', userId, 'with FF:', fairFight, 'Stats:', battleStats);
 
             if (btn) {
                 btn.textContent = '✓ Updated!';
@@ -397,7 +407,7 @@
                 addedAt: Date.now()
             });
 
-            console.log(`Added target ${userId} with FF: ${fairFight}, Stats: ${battleStats}`);
+            debugLog('Added target', userId, 'with FF:', fairFight, 'Stats:', battleStats);
 
             if (btn) {
                 btn.textContent = '✓ Added!';
@@ -442,7 +452,7 @@
         const listType = isEnemiesPage ? 'enemies' : 'targets';
         const btnId = `tm-scrape-${listType}-btn`;
 
-        console.log(`Detected ${listType} page, adding button...`);
+        debugLog('Detected', listType, 'page, adding button...');
 
         if (document.getElementById(btnId)) return;
 
@@ -467,13 +477,13 @@
                 button.addEventListener('mouseout', () => button.style.background = '#9b59b6');
 
                 container.appendChild(button);
-                console.log(`Import ${listType} button added successfully to sidebar`);
+                debugLog('Import', listType, 'button added successfully to sidebar');
             } else {
                 attempts++;
                 if (attempts < maxAttempts) {
                     setTimeout(tryAddButton, 500);
                 } else {
-                    console.log('Could not find sidebar container after', maxAttempts, 'attempts');
+                    debugLog('Could not find sidebar container after', maxAttempts, 'attempts');
                 }
             }
         }
@@ -514,7 +524,7 @@
         const tableWrapper = document.querySelector('.tableWrapper');
 
         if (!tableWrapper) {
-            alert(`Could not find ${listType} list on this page`);
+            updateStatus('Could not find ' + listType + ' list on this page', 'error');
             if (btn) {
                 btn.textContent = `🎯 Import ${listType.charAt(0).toUpperCase() + listType.slice(1)}`;
                 btn.disabled = false;
@@ -531,16 +541,16 @@
         }
 
         if (userRows.length === 0) {
-            alert(`Could not find any users in the ${listType} list`);
+            updateStatus('Could not find any users in the ' + listType + ' list', 'error');
             if (btn) {
                 btn.textContent = `🎯 Import ${listType.charAt(0).toUpperCase() + listType.slice(1)}`;
                 btn.disabled = false;
             }
-            console.log('No user rows found. TableWrapper HTML:', tableWrapper.innerHTML.substring(0, 500));
+            debugLog('No user rows found in tableWrapper');
             return;
         }
 
-        console.log(`Found ${userRows.length} potential user rows`);
+        debugLog('Found', userRows.length, 'potential user rows');
 
         let addedCount = 0;
 
@@ -609,7 +619,7 @@
                 }
             }
 
-            console.log(`Scraped user ${name} [${userId}]: Level=${level}, FF=${fairFight}, Stats=${battleStats}`);
+            debugLog('Scraped user', name, '[' + userId + ']: Level=' + level + ', FF=' + fairFight + ', Stats=' + battleStats);
 
             // Add target
             targetList.push({
@@ -639,8 +649,8 @@
             }, 3000);
         }
 
-        alert(`Added ${addedCount} targets from ${listType} list!\n\nFF Scouter data has been captured.\n\nClick "Target Manager" to view and manage them.`);
-        console.log(`Scraped ${addedCount} targets from ${listType} page`);
+        updateStatus(`Added ${addedCount} targets from ${listType} list. Click "Target Manager" to view them.`, 'success');
+        debugLog('Scraped', addedCount, 'targets from', listType, 'page');
     }
 
     // Back to Torn function
@@ -680,7 +690,7 @@
 
                 <div class="tm-controls">
                     <div class="control-group">
-                        <label>API Key: <input type="password" id="tm-api-key" placeholder="Required for imports" value="${escapeHtml(apiKey)}" style="width: 200px;"></label>
+                        <label>API Key: <input type="password" id="tm-api-key" placeholder="Required for imports" style="width: 200px;"></label>
                         <button id="tm-save-api" class="torn-btn">Save API Key</button>
                     </div>
 
@@ -712,6 +722,12 @@
         `;
 
         content.innerHTML = html;
+
+        // Set API key value via JS (not in HTML template) to avoid leaking key in DOM source
+        const apiKeyInput = document.getElementById('tm-api-key');
+        if (apiKeyInput && apiKey) {
+            apiKeyInput.value = apiKey;
+        }
 
         // Event listeners
         document.getElementById('back-to-torn').addEventListener('click', () => {
@@ -916,7 +932,7 @@
             const data = await safeFetch(`https://api.torn.com/user/${encodeURIComponent(userId)}?selections=profile&key=${encodeURIComponent(apiKey)}`);
 
             if (data.error) {
-                console.error(`API error for user ${userId}:`, data.error);
+                debugError('API error for user', userId, data.error);
                 return;
             }
 
@@ -933,10 +949,10 @@
                 // Immediately save and update display
                 saveTargets();
                 displayTargetsTable();
-                console.log(`Updated target ${userId}: ${target.name} - ${target.status.description}`);
+                debugLog('Updated target', userId, target.name, '-', target.status.description);
             }
         } catch (error) {
-            console.error(`Error fetching target ${userId}:`, error);
+            debugError('Error fetching target', userId, error);
         }
     }
 
@@ -958,7 +974,7 @@
         }
 
         if (isRefreshing) {
-            console.log('Refresh already in progress');
+            debugLog('Refresh already in progress');
             return;
         }
 
@@ -1011,7 +1027,7 @@
                     }
 
                 } catch (error) {
-                    console.error(`Error fetching ${target.id}:`, error);
+                    debugError('Error fetching', target.id, error);
                 }
             }
 
@@ -1031,7 +1047,7 @@
     // Auto-refresh
     function startAutoRefresh() {
         stopAutoRefresh();
-        console.log('Auto-refresh started');
+        debugLog('Auto-refresh started');
         autoRefreshInterval = setInterval(refreshAllTargets, API_DELAY * 10); // Every 30 seconds
         refreshAllTargets(); // Immediate first refresh
     }
@@ -1040,7 +1056,7 @@
         if (autoRefreshInterval) {
             clearInterval(autoRefreshInterval);
             autoRefreshInterval = null;
-            console.log('Auto-refresh stopped');
+            debugLog('Auto-refresh stopped');
         }
     }
 
@@ -1417,7 +1433,7 @@
         setupStorageListener();
         waitForSidebar();
         addListPageButtons();
-        console.log('Torn Target Manager: Initialized successfully');
+        debugLog('Initialized successfully');
     }
 
     // Start on page load

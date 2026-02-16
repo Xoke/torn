@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Target Manager
-// @namespace    http://tampermonkey.net/
-// @version      4.0
+// @namespace    https://xoke.org/
+// @version      4.1
 // @description  Manages a priority queue of elimination targets with live status updates, smart sorting, and bulk import from enemies/targets lists
 // @author       Xoke
 // @match        https://www.torn.com/*

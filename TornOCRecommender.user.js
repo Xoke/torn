@@ -1,7 +1,8 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      1.6
+// @version      1.7
+// @run-at       document-end
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -13,6 +14,12 @@
 
 (function() {
     'use strict';
+
+    const DEBUG = false;
+
+    function debugLog() {
+        if (DEBUG) console.log.apply(console, ['[OC Recommender]'].concat(Array.prototype.slice.call(arguments)));
+    }
 
     // Thresholds
     const THRESHOLD_LEVEL_2_6 = 70;  // Level 2-6 need 70%+
@@ -94,10 +101,10 @@
         const text = crimeCard.textContent;
         const match = text.match(/(\d+):(\d{2}):(\d{2}):(\d{2})/);
         if (!match) return Infinity;
-        const days = parseInt(match[1], 10);
-        const hours = parseInt(match[2], 10);
-        const minutes = parseInt(match[3], 10);
-        const seconds = parseInt(match[4], 10);
+        const days = parseInt(match[1], 10) || 0;
+        const hours = parseInt(match[2], 10) || 0;
+        const minutes = parseInt(match[3], 10) || 0;
+        const seconds = parseInt(match[4], 10) || 0;
         return days * 86400 + hours * 3600 + minutes * 60 + seconds;
     }
 
@@ -351,35 +358,40 @@
 
     // Main function
     function updateRecommendations() {
+        try {
         clearRecommendations();
 
         const playerName = getCurrentPlayerName();
         if (playerName && isPlayerInOC(playerName)) {
-            console.log(`Torn OC Recommender: ${playerName} is already in an OC, skipping recommendations`);
+            debugLog(playerName, 'is already in an OC, skipping recommendations');
             return;
         }
 
         const joinableSlots = analyzeJoinableSlots();
 
         if (joinableSlots.length === 0) {
-            console.log('Torn OC Recommender: No joinable slots found');
+            debugLog('No joinable slots found');
             return;
         }
 
-        console.log('Torn OC Recommender: Found', joinableSlots.length, 'joinable slots');
+        debugLog('Found', joinableSlots.length, 'joinable slots');
 
         const { primary, secondary } = findRecommendedOCs(joinableSlots);
 
         if (primary) {
-            console.log(`Torn OC Recommender: Best OC is Level ${primary.level} "${primary.crimeName}" - ${primary.roleName} (${primary.successRate}%, ${primary.filledSlots} filled, ${formatTime(primary.timeRemaining)} left)`);
+            debugLog('Best OC: Level', primary.level, primary.crimeName, '-', primary.roleName, '(' + primary.successRate + '%, ' + primary.filledSlots + ' filled, ' + formatTime(primary.timeRemaining) + ' left)');
             applyRecommendation(primary, true);
 
             secondary.forEach(slot => {
-                console.log(`Torn OC Recommender: Also recommended: Level ${slot.level} "${slot.crimeName}" - ${slot.roleName} (${slot.successRate}%, ${slot.filledSlots} filled, ${formatTime(slot.timeRemaining)} left)`);
+                debugLog('Also recommended: Level', slot.level, slot.crimeName, '-', slot.roleName, '(' + slot.successRate + '%, ' + slot.filledSlots + ' filled, ' + formatTime(slot.timeRemaining) + ' left)');
                 applyRecommendation(slot, false);
             });
         } else {
-            console.log('Torn OC Recommender: No suitable OC found');
+            debugLog('No suitable OC found');
+        }
+        } catch (error) {
+            debugLog('Error in updateRecommendations:', error);
+            clearRecommendations();
         }
     }
 
@@ -395,20 +407,21 @@
             if (initRetryCount < MAX_INIT_RETRIES) {
                 setTimeout(initialize, 500);
             } else {
-                console.log('Torn OC Recommender: OC elements not found');
+                debugLog('OC elements not found after', MAX_INIT_RETRIES, 'retries');
             }
             return;
         }
 
-        console.log('Torn OC Recommender: Initialized');
+        debugLog('Initialized');
 
         // Initial update
         updateRecommendations();
 
-        // Set up MutationObserver
+        // Set up MutationObserver with debouncing
+        let debounceTimeout = null;
         const observer = new MutationObserver(() => {
-            clearTimeout(window.ocRecommenderTimeout);
-            window.ocRecommenderTimeout = setTimeout(updateRecommendations, 200);
+            clearTimeout(debounceTimeout);
+            debounceTimeout = setTimeout(updateRecommendations, 200);
         });
 
         const container = document.querySelector('#faction-crimes, .faction-crimes-wrap, #faction-crimes-root');
@@ -421,9 +434,18 @@
             });
         }
 
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
+        // Only observe body if specific container not found (reduces mutation overhead)
+        if (!container) {
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            clearTimeout(debounceTimeout);
+            observer.disconnect();
         });
     }
 

@@ -1,7 +1,8 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      2.6
+// @version      2.7
+// @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -13,6 +14,12 @@
 
 (function() {
     'use strict';
+
+    const DEBUG = false;
+
+    function debugLog() {
+        if (DEBUG) console.log.apply(console, ['[OC Highlighter]'].concat(Array.prototype.slice.call(arguments)));
+    }
 
     const SUCCESS_THRESHOLD = 70;
     const MIN_LEVEL = 2;
@@ -125,7 +132,9 @@
 
     // Highlight stalled OC crime cards (native view)
     function highlightStalledOCs() {
-        const crimeCards = document.querySelectorAll('[data-oc-id]');
+        const root = document.querySelector('#faction-crimes, .faction-crimes-wrap, #faction-crimes-root');
+        if (!root) return;
+        const crimeCards = root.querySelectorAll('[data-oc-id]');
 
         crimeCards.forEach(card => {
             const paused = isCrimePaused(card);
@@ -133,7 +142,7 @@
 
             if (paused && currentTag !== 'stalled') {
                 applyHighlight(card, STALLED_BORDER, STALLED_OUTLINE, STALLED_BOX_SHADOW, 'stalled');
-                console.log(`Stalled OC: ${card.getAttribute('data-oc-id')}`);
+                debugLog('Stalled OC:', card.getAttribute('data-oc-id'));
             } else if (!paused && currentTag === 'stalled') {
                 clearHighlight(card);
             }
@@ -142,7 +151,9 @@
 
     // Highlight stalled OC rows in OC2 table view
     function highlightStalledOC2Rows() {
-        const crimeRows = document.querySelectorAll('[class*="OC2-crimeLi"]');
+        const oc2Root = document.querySelector('.OC2-memberViewer');
+        if (!oc2Root) return;
+        const crimeRows = oc2Root.querySelectorAll('[class*="OC2-crimeLi"]');
 
         crimeRows.forEach(row => {
             const hasDelay = row.textContent.includes('Delay:') || row.textContent.includes('Delay ');
@@ -156,8 +167,10 @@
 
     // Main function to highlight low success slots and missing items
     function highlightSlotIssues() {
+        const root = document.querySelector('#faction-crimes, .faction-crimes-wrap, #faction-crimes-root');
+        if (!root) return;
         // Find all slot wrappers - class pattern: wrapper___XXXXX with success color class
-        const slots = document.querySelectorAll('[class*="wrapper___"][class*="success"]');
+        const slots = root.querySelectorAll('[class*="wrapper___"][class*="success"]');
 
         slots.forEach(slot => {
             // Skip if not a slot wrapper (check for slotHeader inside)
@@ -173,7 +186,7 @@
             if (hasPlayer(slot) && hasMissingItem(slot)) {
                 if (currentTag !== 'missingItem') {
                     applyHighlight(slot, MISSING_ITEM_BORDER, MISSING_ITEM_OUTLINE, MISSING_ITEM_BOX_SHADOW, 'missingItem');
-                    console.log(`Missing item: Level ${level}`);
+                    debugLog('Missing item: Level', level);
                 }
                 return;
             }
@@ -198,7 +211,7 @@
             if (successRate < SUCCESS_THRESHOLD) {
                 if (currentTag !== 'lowSuccess') {
                     applyHighlight(slot, HIGHLIGHT_BORDER, HIGHLIGHT_OUTLINE, HIGHLIGHT_BOX_SHADOW, 'lowSuccess');
-                    console.log(`Low success slot: Level ${level}, Success ${successRate}%`);
+                    debugLog('Low success slot: Level', level, 'Success', successRate + '%');
                 }
             } else {
                 if (currentTag === 'lowSuccess') clearHighlight(slot);
@@ -208,7 +221,9 @@
 
     // Highlight unavailable members in the OC2 table view
     function highlightUnavailableMembers() {
-        const memberRows = document.querySelectorAll('[class*="OC2-crimeMemberLi"]');
+        const oc2Root = document.querySelector('.OC2-memberViewer');
+        if (!oc2Root) return;
+        const memberRows = oc2Root.querySelectorAll('[class*="OC2-crimeMemberLi"]');
 
         memberRows.forEach(memberRow => {
             const statusCell = memberRow.querySelector('[class*="OC2-tableCrimeMemberStatus"]');
@@ -251,20 +266,21 @@
             if (initRetryCount < MAX_INIT_RETRIES) {
                 setTimeout(initialize, 500);
             } else {
-                console.log('Torn OC Success Highlighter: OC elements not found');
+                debugLog('OC elements not found after', MAX_INIT_RETRIES, 'retries');
             }
             return;
         }
 
-        console.log('Torn OC Success Highlighter: Initialized');
+        debugLog('Initialized');
 
         // Initial highlight
         runAllChecks();
 
-        // Set up MutationObserver for dynamic updates
+        // Set up MutationObserver with debouncing
+        let debounceTimeout = null;
         const observer = new MutationObserver(() => {
-            clearTimeout(window.ocHighlighterTimeout);
-            window.ocHighlighterTimeout = setTimeout(runAllChecks, 100);
+            clearTimeout(debounceTimeout);
+            debounceTimeout = setTimeout(runAllChecks, 100);
         });
 
         // Observe the native faction crimes container
@@ -289,14 +305,23 @@
             });
         }
 
-        // Also observe body for SPA navigation and late OC2 injection
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+        // Only observe body if specific containers not found (reduces mutation overhead)
+        if (!container && !oc2Container) {
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
 
-        // Periodic re-check for OC2 elements (OC2 toggles display without triggering mutations)
-        setInterval(runAllChecks, 3000);
+        // Periodic re-check as fallback (OC2 toggles display without triggering mutations)
+        const periodicCheckInterval = setInterval(runAllChecks, 10000);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            clearInterval(periodicCheckInterval);
+            clearTimeout(debounceTimeout);
+            observer.disconnect();
+        });
     }
 
     // Start when page is ready
