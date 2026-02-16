@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Ranked War Target Finder
 // @namespace    https://xoke.org/
-// @version      8.3
+// @version      8.4
 // @description  Find optimal targets for ranked wars with FF integration and chain monitoring
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -848,7 +848,7 @@
         // Update each target's row
         for (var j = 0; j < targets.length; j++) {
             var target = targets[j];
-            var row = rowMap[target.id];
+            var row = rowMap[String(target.id)];
 
             if (row) {
                 var rowData = prepareRowData(target, now);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Ranked War Target Finder
 // @namespace    https://xoke.org/
-// @version      8.3
+// @version      8.4
 // @description  Find optimal targets for ranked wars with FF integration and chain monitoring
 // @author       Xoke
 // @match        https://www.torn.com/*
