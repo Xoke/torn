@@ -23,7 +23,7 @@ Monitors for retaliation opportunities and tracks players who have attacked fact
 Comprehensive target management tool for tracking and organizing attack targets.
 
 ### [Torn Xanax Reminder](https://raw.githubusercontent.com/Xoke/torn/main/TornXanaxReminder.user.js)
-Reminds you to take your Xanax when you have no drug cooldown. Shows a small clickable banner that takes you to your items page.
+Reminds you to take your Xanax when you have no drug cooldown. Shows a small clickable banner that takes you to your items page. Amended from [Don't forget your Xanax](https://greasyfork.org/en/scripts/490129-don-t-forget-your-xanax) by Shade — bar is now smaller and clickable, and removed embedded analytics script.
 
 ### [Torn Vault Catcher](https://raw.githubusercontent.com/Xoke/torn/main/TornVaultCatcher.user.js)
 Warns faction bankers when giving a member more money than their vault balance, helping prevent accidental overpayments from faction funds.
