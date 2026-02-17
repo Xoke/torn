@@ -22,6 +22,9 @@ Monitors for retaliation opportunities and tracks players who have attacked fact
 ### [Torn Target Manager](https://raw.githubusercontent.com/Xoke/torn/main/TornTargetManager.user.js)
 Comprehensive target management tool for tracking and organizing attack targets.
 
+### [Torn Xanax Reminder](https://raw.githubusercontent.com/Xoke/torn/main/TornXanaxReminder.user.js)
+Reminds you to take your Xanax when you have no drug cooldown. Shows a small clickable banner that takes you to your items page.
+
 ### [Torn Vault Catcher](https://raw.githubusercontent.com/Xoke/torn/main/TornVaultCatcher.user.js)
 Warns faction bankers when giving a member more money than their vault balance, helping prevent accidental overpayments from faction funds.
 
