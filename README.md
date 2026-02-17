@@ -22,6 +22,9 @@ Monitors for retaliation opportunities and tracks players who have attacked fact
 ### [Torn Target Manager](https://raw.githubusercontent.com/Xoke/torn/main/TornTargetManager.user.js)
 Comprehensive target management tool for tracking and organizing attack targets.
 
+### [Torn Vault Catcher](https://raw.githubusercontent.com/Xoke/torn/main/TornVaultCatcher.user.js)
+WIP - Warns faction bankers when giving a member more money than their vault balance, helping prevent accidental overpayments from faction funds.
+
 ## Other Useful Scripts
 
 Scripts by other authors that I've found useful.
