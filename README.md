@@ -4,9 +4,6 @@ A collection of Greasemonkey/Tampermonkey userscripts for [Torn](https://www.tor
 
 ## Scripts
 
-### [Torn Attack Monitor](https://raw.githubusercontent.com/Xoke/torn/main/TornAttackMonitor.user.js)
-Monitors the attack log and alerts you when someone initiates an attack or joins a fight. Displays notifications in the top-right corner of the screen.
-
 ### [Torn Faction CSV Exporter](https://raw.githubusercontent.com/Xoke/torn/main/TornFactionCSVExporter.user.js)
 Exports faction member data to CSV format, including battle stats from FF Scouter. Useful for analyzing faction strength and planning wars.
 
