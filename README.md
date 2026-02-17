@@ -22,6 +22,36 @@ Monitors for retaliation opportunities and tracks players who have attacked fact
 ### [Torn Target Manager](https://raw.githubusercontent.com/Xoke/torn/main/TornTargetManager.user.js)
 Comprehensive target management tool for tracking and organizing attack targets.
 
+## Other Useful Scripts
+
+Scripts by other authors that I've found useful.
+
+### Racing
+- [Auto Select Car](https://greasyfork.org/en/scripts/398078-auto-select-car) - Remembers your preferred car for each racetrack and hides other vehicles.
+- [Torn Custom Race Presets](https://greasyfork.org/en/scripts/393632-torn-custom-race-presets) - Create and use preset templates for custom race configuration.
+- [BrainRacing: Custom Race Presets](https://raw.githubusercontent.com/br41nslug/torn-brainscripts/main/scripts/custom-race-presets.user.js) - Quick preset links for dedicated racers.
+- [Race Filter](https://greasyfork.org/en/scripts/389105-race-filter) - Filter out long, private, or paid races.
+
+### War & Combat
+- [Torn War Helper](https://greasyfork.org/en/scripts/30913-torn-war-helper) - Adds filters to the faction war page.
+- [Torn Attack Stats](https://greasyfork.org/en/scripts/391922-torn-extensions-torn-attack-stats) - Shows supplementary information on the attack page.
+- [FF Scouter V2](https://greasyfork.org/en/scripts/535292-ff-scouter-v2) - Shows expected Fair Fight score against targets and faction war status.
+- [Chain Watch Alert](https://greasyfork.org/en/scripts/478422-torn-city-chain-watch-alert-enhanced) - Alerts when your chain timer drops below a threshold and fades the screen red.
+
+### Crimes & OC
+- [Crime Morale](https://greasyfork.org/en/scripts/515557-crime-morale) - Comprehensive tool for Crime 2.0 supporting scamming, pickpocketing, and burglary.
+- [OC 2.0 Helper](https://greasyfork.org/en/scripts/522974-torn-oc-2-0-helper) - Overview of OC 2.0 showing members not in crimes, members in each crime, and issues.
+- [OutcomeDB](https://greasyfork.org/en/scripts/489750-outcomedb) - Captures crime outcome, skill gain, and target data for analysis.
+
+### Trading & Economy
+- [Torn Bazaar Filler](https://greasyfork.org/en/scripts/473470-torn-bazaar-filler) - Auto-fills bazaar prices with lowest market price minus a customizable amount.
+- [Torn Auction Price Checker](https://greasyfork.org/en/scripts/564049-torn-auction-price-checker) - Shows historical pricing data for auction house items.
+- [Torn Jewelry Store Cluster Ring Alert](https://greasyfork.org/en/scripts/553079-torn-jewelry-store-cluster-ring-alert) - Alerts when both cameras and guard are disabled at the jewelry store.
+
+### Missions & Misc
+- [Torn Mission Reward Information](https://greasyfork.org/en/scripts/395668-torn-mission-reward-information) - Displays mission reward value per credit and compares mod offers.
+- [cryosis7's Torn Userscripts](https://github.com/cryosis7/torn_userscripts) - Collection of utility scripts for filtering, racing, and various game mechanics.
+
 ## Installation
 
 1. Install a userscript manager like [Tampermonkey](https://www.tampermonkey.net/) or [Greasemonkey](https://www.greasespot.net/)
