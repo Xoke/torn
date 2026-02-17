@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Vault Catcher
 // @namespace    https://xoke.org/
-// @version      1.0
+// @version      1.1
 // @description  Warns when giving a faction member more money than their vault balance
 // @author       Xoke (based on VaultCatcher by Lazerpent [2112641])
 // @match        https://www.torn.com/factions.php*
@@ -14,9 +14,6 @@
 
 (function () {
     'use strict';
-
-    const DEBUG = false;
-    function debugLog(...args) { if (DEBUG) console.log('[VaultCatcher]', ...args); }
 
     let interceptActive = false;
 
@@ -58,7 +55,7 @@
         // Extract just the name (format: "PlayerName [ID]")
         const nameMatch = userInput.value.match(/^(.+?)\s*\[/);
         const selectedName = nameMatch ? nameMatch[1].trim() : userInput.value.trim();
-        debugLog('Looking for user:', selectedName);
+
 
         // Find all list items in the depositor section
         const listItems = container.querySelectorAll('li');
@@ -141,23 +138,15 @@
         submitBtn.dataset.vaultCatcher = 'true';
         interceptActive = true;
 
-        debugLog('Submit button intercepted');
-
         submitBtn.addEventListener('click', function (e) {
             // Only check when giving money (not adding to balance)
-            if (!isGivingMoney()) {
-                debugLog('Adding to balance - no check needed');
-                return;
-            }
+            if (!isGivingMoney()) return;
 
             const amount = getGiveAmount();
             const balance = getSelectedBalance();
 
-            debugLog('Amount:', amount, 'Balance:', balance);
-
             if (amount === null || balance === null || isNaN(amount) || isNaN(balance)) {
-                debugLog('Could not determine amount or balance');
-                return; // Don't block if we can't determine values
+                return;
             }
 
             if (amount > balance) {
