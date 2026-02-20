@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Xanax Reminder
 // @namespace    https://xoke.org/
-// @version      1.1
+// @version      1.2
 // @description  Reminds you to take your Xanax when you have no drug cooldown
 // @author       Xoke (based on "Don't forget your Xanax" by Shade)
 // @match        https://www.torn.com/*

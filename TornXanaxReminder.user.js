@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Xanax Reminder
 // @namespace    https://xoke.org/
-// @version      1.1
+// @version      1.2
 // @description  Reminds you to take your Xanax when you have no drug cooldown
 // @author       Xoke (based on "Don't forget your Xanax" by Shade)
 // @match        https://www.torn.com/*
@@ -18,11 +18,15 @@
 (function () {
     'use strict';
 
-    setTimeout(function () {
+    var reminderBar = null;
+
+    function addReminder() {
+        if (document.querySelector('.torn-xanax-reminder-bar')) return;
         var drugcd = document.querySelector("[aria-label^='Drug Cooldown:']");
         if (drugcd != null) return;
 
         var bar = document.createElement('a');
+        bar.className = 'torn-xanax-reminder-bar';
         bar.href = 'https://www.torn.com/item.php';
         bar.textContent = 'Take your Xanax!';
         bar.style.cssText =
@@ -35,5 +39,17 @@
         bar.addEventListener('mouseleave', function () { bar.style.background = '#c0392b'; });
 
         document.body.appendChild(bar);
-    }, 5000);
+        reminderBar = bar;
+    }
+
+    function removeReminder() {
+        if (reminderBar && reminderBar.parentNode) {
+            reminderBar.parentNode.removeChild(reminderBar);
+            reminderBar = null;
+        }
+    }
+
+    window.addEventListener('beforeunload', removeReminder);
+
+    setTimeout(addReminder, 5000);
 })();
