@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Vault Catcher
 // @namespace    https://xoke.org/
-// @version      1.1
+// @version      1.3
 // @description  Warns when giving a faction member more money than their vault balance
 // @author       Xoke (based on VaultCatcher by Lazerpent [2112641])
 // @match        https://www.torn.com/factions.php*
@@ -124,6 +124,82 @@
         return true;
     }
 
+    function setMoneyInput(value) {
+        const container = document.getElementById('option-give-to-user');
+        if (!container) return;
+
+        // Find visible and hidden money inputs (not inside depositor list)
+        const allVisible = container.querySelectorAll('input.input-money:not([type="hidden"])');
+        const allHidden = container.querySelectorAll('input[type="hidden"].input-money');
+
+        var visibleInput = null;
+        var hiddenInput = null;
+        for (const input of allVisible) {
+            if (!input.closest('li')) { visibleInput = input; break; }
+        }
+        for (const input of allHidden) {
+            if (!input.closest('li')) { hiddenInput = input; break; }
+        }
+
+        var formatted = '$' + value.toLocaleString();
+
+        // Use React's native setter to trigger change detection
+        var nativeSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype, 'value'
+        ).set;
+
+        if (visibleInput) {
+            nativeSetter.call(visibleInput, formatted);
+            visibleInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (hiddenInput) {
+            nativeSetter.call(hiddenInput, String(value));
+            hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+
+    function addFillBalanceButton() {
+        const container = document.getElementById('option-give-to-user');
+        if (!container) return;
+        if (container.querySelector('.vault-catcher-fill-btn')) return;
+
+        // Find the money input group (not inside depositor list)
+        const allGroups = container.querySelectorAll('.input-money-group');
+        var moneyGroup = null;
+        for (const group of allGroups) {
+            if (!group.closest('li')) { moneyGroup = group; break; }
+        }
+        if (!moneyGroup) return;
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'vault-catcher-fill-btn';
+        btn.textContent = 'Fill balance';
+        btn.style.cssText =
+            'margin-left: 8px; padding: 2px 10px; font-size: 11px; cursor: pointer; ' +
+            'background: #2980b9; color: white; border: none; border-radius: 3px; ' +
+            'vertical-align: middle;';
+
+        btn.addEventListener('mouseenter', function () { btn.style.background = '#3498db'; });
+        btn.addEventListener('mouseleave', function () { btn.style.background = '#2980b9'; });
+
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            var balance = getSelectedBalance();
+            if (balance === null || isNaN(balance)) {
+                alert('Could not determine the selected member\'s vault balance.');
+                return;
+            }
+            if (balance <= 0) {
+                alert('This member has no vault balance.');
+                return;
+            }
+            setMoneyInput(balance);
+        });
+
+        moneyGroup.parentNode.insertBefore(btn, moneyGroup.nextSibling);
+    }
+
     function interceptSubmit() {
         if (interceptActive) return;
 
@@ -137,6 +213,8 @@
         if (submitBtn.dataset.vaultCatcher) return;
         submitBtn.dataset.vaultCatcher = 'true';
         interceptActive = true;
+
+        addFillBalanceButton();
 
         submitBtn.addEventListener('click', function (e) {
             // Only check when giving money (not adding to balance)
@@ -153,13 +231,20 @@
                 e.preventDefault();
                 e.stopImmediatePropagation();
 
-                const formattedAmount = '$' + amount.toLocaleString();
-                const formattedBalance = '$' + balance.toLocaleString();
+                // Format numbers only for display (no raw DOM text in confirm)
+                function formatCurrency(n) {
+                    var num = Number(n);
+                    if (isNaN(num) || num < 0) return '$0';
+                    return '$' + Math.floor(num).toLocaleString();
+                }
+                var formattedAmount = formatCurrency(amount);
+                var formattedBalance = formatCurrency(balance);
+                var fromFunds = formatCurrency(amount - balance);
 
                 const proceed = confirm(
                     'Vault Catcher Warning!\n\n' +
                     'You are giving ' + formattedAmount + ' but this member\'s vault balance is only ' + formattedBalance + '.\n\n' +
-                    'This means ' + '$' + (amount - balance).toLocaleString() + ' will come from faction funds.\n\n' +
+                    'This means ' + fromFunds + ' will come from faction funds.\n\n' +
                     'Do you want to continue?'
                 );
 
@@ -190,7 +275,7 @@
                 interceptSubmit();
             });
 
-            const target = document.getElementById('option-give-to-user') || document.getElementById('faction-controls');
+            const target = document.getElementById('option-give-to-user') || document.getElementById('faction-controls') || document.querySelector('#factions-page');
             if (target) {
                 observer.observe(target, { childList: true, subtree: true });
             } else {
