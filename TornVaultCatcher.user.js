@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Vault Catcher
 // @namespace    https://xoke.org/
-// @version      1.3
+// @version      1.4
 // @description  Warns when giving a faction member more money than their vault balance
 // @author       Xoke (based on VaultCatcher by Lazerpent [2112641])
 // @match        https://www.torn.com/factions.php*
@@ -215,6 +215,16 @@
         interceptActive = true;
 
         addFillBalanceButton();
+
+        // Watch for React re-renders that destroy our button (e.g. user selection)
+        var btnObserver = new MutationObserver(function () {
+            if (!container.querySelector('.vault-catcher-fill-btn')) {
+                addFillBalanceButton();
+            }
+        });
+        btnObserver.observe(container, { childList: true, subtree: true });
+
+        window.addEventListener('beforeunload', function () { btnObserver.disconnect(); });
 
         submitBtn.addEventListener('click', function (e) {
             // Only check when giving money (not adding to balance)
