@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      1.4
+// @version      1.5
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -52,7 +52,8 @@
             life: 30,
             cooldown: 30,
             displayNote: 'check blood type',
-            matchNames: ['Blood Bag'],  // prefix — matches O/A/B/AB variants
+            matchNames: ['Blood Bag'],
+            excludePattern: /irradiated/i,  // never recommend Irradiated Blood Bags
         },
     ];
     // Sorted descending by reduction so recommend() can just grab the first usable item.
@@ -182,11 +183,8 @@
     // ─── Inline highlight ─────────────────────────────────────────────────
     function textMatchesItem(text, item) {
         const t = text.trim().toLowerCase();
-        return item.matchNames.some(name => {
-            const n = name.toLowerCase();
-            // Exact match, or starts with name (catches "Blood Bag O", "Blood Bag (O)", etc.)
-            return t === n || t.startsWith(n + ' ') || t.startsWith(n + '-') || t.startsWith(n + '(');
-        });
+        if (item.excludePattern && item.excludePattern.test(t)) return false;
+        return item.matchNames.some(name => t === name.toLowerCase() || t.includes(name.toLowerCase()));
     }
 
     function highlightItems(rec) {
