@@ -7,6 +7,9 @@ A collection of Greasemonkey/Tampermonkey userscripts for [Torn](https://www.tor
 ### [Torn Faction CSV Exporter](https://raw.githubusercontent.com/Xoke/torn/main/TornFactionCSVExporter.user.js)
 Exports faction member data to CSV format, including battle stats from FF Scouter. Useful for analyzing faction strength and planning wars.
 
+### [Torn Heal Advisor](https://raw.githubusercontent.com/Xoke/torn/main/TornHealAdvisor.user.js)
+Recommends the most efficient healing item to use based on your remaining hospital time. On your items page or faction armoury, shows a banner with the best item to use and highlights it in the list. The logic picks the highest-cooldown item whose cooldown still expires before you leave hospital (so you can stack another heal) — and falls back to the smallest item when the stay is too short to justify a long cooldown.
+
 ### [Torn OC Recommender](https://raw.githubusercontent.com/Xoke/torn/main/TornOCRecommender.user.js)
 WIP - Recommends the best Organized Crime to join based on your success rates. Follows faction rules: Level 2-6 require 70%+, Level 7+ require 50%+. Highlights the recommended slot with a green glow.
 
