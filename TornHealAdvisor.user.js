@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      1.5
+// @version      1.6
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -248,9 +248,29 @@
 
     // ─── Run ──────────────────────────────────────────────────────────────
     let retryObserver = null;
+    let highlightObserver = null;
+
+    function startHighlightObserver(rec) {
+        if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
+
+        // Watch the items container for DOM changes (lazy-loaded items on item.php).
+        const root = document.querySelector('#mainContainer [class*="items-cont-wrap"]') ||
+                     document.querySelector('#mainContainer') ||
+                     document.body;
+
+        highlightObserver = new MutationObserver(() => highlightItems(rec));
+        highlightObserver.observe(root, { childList: true, subtree: true });
+
+        // Stop watching after 30s — items should all be loaded by then.
+        setTimeout(() => {
+            if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
+        }, 30000);
+    }
 
     function run() {
         cleanup();
+        if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
+
         const hospMin = getHospitalMinutes();
 
         if (!hospMin || hospMin <= 0) {
@@ -275,12 +295,17 @@
 
         const rec = recommend(hospMin);
         showBanner(hospMin, rec);
-        setTimeout(() => highlightItems(rec), 500);
+        // Initial highlight pass + keep watching for lazily rendered items.
+        setTimeout(() => {
+            highlightItems(rec);
+            startHighlightObserver(rec);
+        }, 500);
     }
 
     setTimeout(run, 2000);
     window.addEventListener('hashchange', () => {
         if (retryObserver) { retryObserver.disconnect(); retryObserver = null; }
+        if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
         setTimeout(run, 1000);
     });
 })();
