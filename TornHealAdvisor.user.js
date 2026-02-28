@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      1.8
+// @version      1.9
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -74,61 +74,72 @@
         return m;
     }
 
-    function getHospitalMinutes() {
-        // Confirmed format: aria-label="Hospital: Hospitalized by PlayerName"
+    // Calls callback(minutes) asynchronously. Tries sync approaches first,
+    // then falls back to triggering a hover to render the tooltip.
+    function detectHospitalMinutes(callback) {
         const hospLink = document.querySelector('[aria-label^="Hospital:"]');
         if (!hospLink) {
             console.log('[HealAdvisor] hospital link not found in DOM yet');
-            return null;
+            callback(null);
+            return;
         }
 
-        // Try 1: surrounding container text.
+        // Try 1: container text (works on factions.php).
         const container = hospLink.closest('li') ||
                           hospLink.closest('[class*="status"]') ||
                           hospLink.parentElement;
         if (container) {
             const mins = parseMinutes(container.textContent);
-            if (mins > 0) return mins;
+            if (mins > 0) { callback(mins); return; }
+
+            // Try countdown element inside the container (data-end / data-seconds).
+            for (const cd of container.querySelectorAll('[data-end], [data-seconds]')) {
+                const end = parseInt(cd.getAttribute('data-end') || '0', 10);
+                if (end > 0) {
+                    const ms = end - Date.now();
+                    if (ms > 60000 && ms < 86400000) { callback(ms / 60000); return; }
+                }
+                const secs = parseInt(cd.getAttribute('data-seconds') || '0', 10);
+                if (secs > 60 && secs < 86400) { callback(secs / 60); return; }
+            }
         }
 
-        // Try 2: i-data attribute — observed format "i_X_MINUTES_W_H" e.g. "i_10_175_17_17".
+        // Try 2: i-data attribute (works on some pages).
         const iData = hospLink.getAttribute('i-data') || '';
-        console.log('[HealAdvisor] i-data value:', iData);
         const iMatch = iData.match(/^i_\d+_(\d+)_/);
         if (iMatch) {
             const mins = parseInt(iMatch[1], 10);
-            if (mins > 0) {
-                console.log('[HealAdvisor] time from i-data:', mins, 'min');
-                return mins;
-            }
+            if (mins > 0) { console.log('[HealAdvisor] time from i-data:', mins); callback(mins); return; }
         }
 
-        // Try 3: any tooltip element.
-        for (const el of document.querySelectorAll('[class*="tooltip" i]')) {
+        // Try 3: any already-visible tooltip mentioning hospital.
+        for (const el of document.querySelectorAll('[class*="tooltip" i], [role="tooltip"]')) {
             if (!/hospital/i.test(el.textContent)) continue;
             const mins = parseMinutes(el.textContent);
-            if (mins > 0) return mins;
+            if (mins > 0) { callback(mins); return; }
         }
 
-        // Try 4: scan for STANDALONE time strings only (e.g. "2h 15m", "45m").
-        // Reject anything embedded in a sentence to avoid false matches.
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
-        let node;
-        while ((node = walker.nextNode())) {
-            const text = node.textContent.trim();
-            if (!text) continue;
-            // Must be a pure time string — digits, h, m, s and spaces only.
-            if (!/^[\dhmsd\s]+$/.test(text)) continue;
-            if (!/\d+\s*h|\d+\s*m/i.test(text)) continue;
-            const mins = parseMinutes(text);
-            if (mins >= 1 && mins < 1440) {
-                console.log('[HealAdvisor] time from page scan:', text, '->', mins, 'min', node.parentElement);
-                return mins;
+        // Try 4: trigger hover on the hospital icon to render its tooltip, then read it.
+        console.log('[HealAdvisor] sync detection failed — trying hover tooltip. Container HTML:', container && container.outerHTML);
+        hospLink.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        hospLink.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+
+        setTimeout(() => {
+            for (const el of document.querySelectorAll('[class*="tooltip" i], [role="tooltip"]')) {
+                const text = el.textContent || '';
+                if (!/hospital/i.test(text)) continue;
+                const mins = parseMinutes(text);
+                if (mins > 0) {
+                    hospLink.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+                    console.log('[HealAdvisor] time from hover tooltip:', mins, 'min —', text.trim());
+                    callback(mins);
+                    return;
+                }
             }
-        }
-
-        console.log('[HealAdvisor] in hospital but cannot find time. Link:', hospLink.outerHTML, '/ Container:', container && container.outerHTML);
-        return null;
+            hospLink.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+            console.log('[HealAdvisor] all detection methods failed');
+            callback(null);
+        }, 400);
     }
 
     // ─── Recommendation ───────────────────────────────────────────────────
@@ -291,35 +302,33 @@
         cleanup();
         if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
 
-        const hospMin = getHospitalMinutes();
-
-        if (!hospMin || hospMin <= 0) {
-            if (!retryObserver) {
-                retryObserver = new MutationObserver(() => {
-                    const mins = getHospitalMinutes();
-                    if (mins > 0) {
-                        retryObserver.disconnect();
-                        retryObserver = null;
-                        run();
-                    }
-                });
-                retryObserver.observe(document.body, { childList: true, subtree: true });
-                setTimeout(() => {
-                    if (retryObserver) { retryObserver.disconnect(); retryObserver = null; }
-                }, 20000);
+        detectHospitalMinutes(function (hospMin) {
+            if (!hospMin || hospMin <= 0) {
+                if (!retryObserver) {
+                    retryObserver = new MutationObserver(() => {
+                        if (document.querySelector('[aria-label^="Hospital:"]')) {
+                            retryObserver.disconnect();
+                            retryObserver = null;
+                            run();
+                        }
+                    });
+                    retryObserver.observe(document.body, { childList: true, subtree: true });
+                    setTimeout(() => {
+                        if (retryObserver) { retryObserver.disconnect(); retryObserver = null; }
+                    }, 20000);
+                }
+                return;
             }
-            return;
-        }
 
-        if (retryObserver) { retryObserver.disconnect(); retryObserver = null; }
+            if (retryObserver) { retryObserver.disconnect(); retryObserver = null; }
 
-        const rec = recommend(hospMin);
-        showBanner(hospMin, rec);
-        // Initial highlight pass + keep watching for lazily rendered items.
-        setTimeout(() => {
-            highlightItems(rec);
-            startHighlightObserver(rec);
-        }, 500);
+            const rec = recommend(hospMin);
+            showBanner(hospMin, rec);
+            setTimeout(() => {
+                highlightItems(rec);
+                startHighlightObserver(rec);
+            }, 500);
+        });
     }
 
     setTimeout(run, 2000);
