@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      1.3
+// @version      1.4
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -52,7 +52,7 @@
             life: 30,
             cooldown: 30,
             displayNote: 'check blood type',
-            matchNames: ['Blood Bag O', 'Blood Bag A', 'Blood Bag B', 'Blood Bag AB'],
+            matchNames: ['Blood Bag'],  // prefix — matches O/A/B/AB variants
         },
     ];
     // Sorted descending by reduction so recommend() can just grab the first usable item.
@@ -180,46 +180,56 @@
     }
 
     // ─── Inline highlight ─────────────────────────────────────────────────
+    function textMatchesItem(text, item) {
+        const t = text.trim().toLowerCase();
+        return item.matchNames.some(name => {
+            const n = name.toLowerCase();
+            // Exact match, or starts with name (catches "Blood Bag O", "Blood Bag (O)", etc.)
+            return t === n || t.startsWith(n + ' ') || t.startsWith(n + '-') || t.startsWith(n + '(');
+        });
+    }
+
     function highlightItems(rec) {
         if (!rec.item) return;
-        const targets = new Set(rec.item.matchNames.map(n => n.toLowerCase()));
 
         const root = document.querySelector('#mainContainer [class*="items-cont-wrap"]') ||
                      document.querySelector('#mainContainer') ||
                      document.body;
 
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        // Search leaf-ish elements whose text content matches the item name.
         const seen = new Set();
-        let node;
+        for (const el of root.querySelectorAll('*')) {
+            // Skip elements that contain many children — they're containers, not name labels.
+            if (el.children.length > 3) continue;
+            if (!textMatchesItem(el.textContent, rec.item)) continue;
 
-        while ((node = walker.nextNode())) {
-            if (!targets.has(node.textContent.trim().toLowerCase())) continue;
-
-            let el = node.parentElement;
+            // Walk up to find a sensible item card container.
+            let card = el;
             for (let i = 0; i < 6; i++) {
-                if (!el || el === document.body) break;
-                if (el.tagName === 'LI' || el.tagName === 'TR') break;
-                if ([...el.classList].some(c => /\bitem\b/i.test(c))) break;
-                if (el.querySelector('button, [class*="use"], [class*="btn"]')) break;
-                el = el.parentElement;
+                if (!card.parentElement || card.parentElement === document.body) break;
+                const p = card.parentElement;
+                if (p.tagName === 'LI' || p.tagName === 'TR') { card = p; break; }
+                if ([...p.classList].some(c => /\bitem\b/i.test(c))) { card = p; break; }
+                if (p.querySelector('button, [class*="use"], [class*="btn"]')) { card = p; break; }
+                card = p;
             }
 
-            if (!el || el === document.body || seen.has(el)) continue;
-            seen.add(el);
+            if (seen.has(card)) continue;
+            seen.add(card);
 
-            el.dataset.healAdvisor = '1';
-            el.style.outline = '2px solid #2ecc71';
-            el.style.outlineOffset = '2px';
-            el.style.borderRadius = '4px';
+            card.dataset.healAdvisor = '1';
+            card.style.outline = '2px solid #2ecc71';
+            card.style.outlineOffset = '2px';
+            card.style.borderRadius = '4px';
 
-            if (!node.parentElement.querySelector('.heal-advisor-badge')) {
+            if (!el.querySelector('.heal-advisor-badge')) {
                 const badge = document.createElement('span');
                 badge.className = 'heal-advisor-badge';
                 badge.textContent = 'Use';
                 badge.style.cssText =
                     'background:#2ecc71;color:#111;font-size:10px;font-weight:bold;' +
                     'padding:1px 5px;border-radius:3px;margin-left:5px;vertical-align:middle;';
-                node.parentElement.appendChild(badge);
+                el.appendChild(badge);
             }
         }
     }
