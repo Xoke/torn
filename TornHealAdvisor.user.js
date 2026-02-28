@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      1.1
+// @version      1.2
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -63,38 +63,57 @@
     }
 
     function getHospitalMinutes() {
-        // Try 1: any element whose aria-label mentions hospital
-        for (const el of document.querySelectorAll('[aria-label]')) {
-            const label = el.getAttribute('aria-label');
-            if (!/hospital/i.test(label)) continue;
-            console.log('[HealAdvisor] aria-label match:', label);
-            const mins = parseMinutes(label);
-            if (mins > 0) return mins;
+        // Confirmed format: aria-label="Hospital: Hospitalized by PlayerName"
+        // The time is NOT in the aria-label — find it in the surrounding DOM.
+        const hospLink = document.querySelector('[aria-label^="Hospital:"]');
+        if (!hospLink) {
+            return null; // not in hospital
         }
 
-        // Try 2: title attribute
-        for (const el of document.querySelectorAll('[title]')) {
-            const title = el.getAttribute('title');
-            if (!/hospital/i.test(title)) continue;
-            console.log('[HealAdvisor] title match:', title);
-            const mins = parseMinutes(title);
-            if (mins > 0) return mins;
+        // Search the closest list item / status container for a time text node.
+        const container = hospLink.closest('li') ||
+                          hospLink.closest('[class*="status"]') ||
+                          hospLink.parentElement;
+
+        if (container) {
+            const mins = parseMinutes(container.textContent);
+            if (mins > 0) {
+                console.log('[HealAdvisor] time found in container:', container.textContent.trim(), '->', mins, 'min');
+                return mins;
+            }
+            // Log the container HTML so we can find where the time is rendered.
+            console.log('[HealAdvisor] in hospital but no time in container. Container HTML:', container.outerHTML);
         }
 
-        // Try 3: shallow text scan — any small element containing "hospital" + a time
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
-        let node;
-        while ((node = walker.nextNode())) {
-            const text = node.textContent.trim();
-            if (!text || text.length > 120) continue;
-            if (/hospital/i.test(text) && /\d+\s*[hms]/i.test(text)) {
-                console.log('[HealAdvisor] text node match:', text, node.parentElement);
-                const mins = parseMinutes(text);
-                if (mins > 0) return mins;
+        // Check for any visible tooltip element that mentions hospital time.
+        for (const el of document.querySelectorAll('[class*="tooltip" i], [class*="Tooltip"]')) {
+            if (!/hospital/i.test(el.textContent)) continue;
+            const mins = parseMinutes(el.textContent);
+            if (mins > 0) {
+                console.log('[HealAdvisor] time found in tooltip:', el.textContent.trim());
+                return mins;
             }
         }
 
-        console.log('[HealAdvisor] Could not detect hospital time. If you are in hospital, inspect the timer element in DevTools and share the HTML.');
+        // Broad fallback: scan all small text nodes for a time pattern near the icon.
+        // The time might be a sibling element rendered separately from the icon.
+        const statusArea = hospLink.closest('[class*="icons" i], [class*="status" i], nav, header') ||
+                           document.body;
+        const walker = document.createTreeWalker(statusArea, NodeFilter.SHOW_TEXT, null);
+        let node;
+        while ((node = walker.nextNode())) {
+            const text = node.textContent.trim();
+            if (!text || text.length > 40) continue;
+            if (/^\d+\s*[hms]/.test(text) || /\d+\s*h\s*\d+\s*m/.test(text)) {
+                const mins = parseMinutes(text);
+                if (mins > 0) {
+                    console.log('[HealAdvisor] time found via broad scan:', text, node.parentElement);
+                    return mins;
+                }
+            }
+        }
+
+        console.log('[HealAdvisor] in hospital but cannot find time. Paste the hospital icon HTML from DevTools.');
         return null;
     }
 
