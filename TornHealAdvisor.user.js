@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      1.0
+// @version      1.1
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -47,14 +47,14 @@
             matchNames: ['Morphine'],
         },
     ];
-    // Must be sorted ascending by cooldown for the recommendation logic to work.
     ITEMS.sort((a, b) => a.cooldownMinutes - b.cooldownMinutes);
 
     // ─── Hospital time parsing ────────────────────────────────────────────
     function parseMinutes(str) {
+        if (!str) return 0;
         let m = 0;
         const h   = str.match(/(\d+)\s*h/i);
-        const min = str.match(/(\d+)\s*m(?!o)/i);   // "m" but not "mo" (month)
+        const min = str.match(/(\d+)\s*m(?!o)/i);
         const sec = str.match(/(\d+)\s*s/i);
         if (h)   m += parseInt(h[1]) * 60;
         if (min) m += parseInt(min[1]);
@@ -63,51 +63,53 @@
     }
 
     function getHospitalMinutes() {
-        // Torn status bar uses aria-labels on its status icon elements.
-        // Drug Cooldown uses "[aria-label^='Drug Cooldown:']" — hospital likely similar.
-        const ariaEl = document.querySelector('[aria-label*="Hospital"], [title*="Hospital"]');
-        if (ariaEl) {
-            const text = ariaEl.getAttribute('aria-label') || ariaEl.getAttribute('title') || '';
-            if (/hospital/i.test(text)) {
+        // Try 1: any element whose aria-label mentions hospital
+        for (const el of document.querySelectorAll('[aria-label]')) {
+            const label = el.getAttribute('aria-label');
+            if (!/hospital/i.test(label)) continue;
+            console.log('[HealAdvisor] aria-label match:', label);
+            const mins = parseMinutes(label);
+            if (mins > 0) return mins;
+        }
+
+        // Try 2: title attribute
+        for (const el of document.querySelectorAll('[title]')) {
+            const title = el.getAttribute('title');
+            if (!/hospital/i.test(title)) continue;
+            console.log('[HealAdvisor] title match:', title);
+            const mins = parseMinutes(title);
+            if (mins > 0) return mins;
+        }
+
+        // Try 3: shallow text scan — any small element containing "hospital" + a time
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+        let node;
+        while ((node = walker.nextNode())) {
+            const text = node.textContent.trim();
+            if (!text || text.length > 120) continue;
+            if (/hospital/i.test(text) && /\d+\s*[hms]/i.test(text)) {
+                console.log('[HealAdvisor] text node match:', text, node.parentElement);
                 const mins = parseMinutes(text);
                 if (mins > 0) return mins;
             }
         }
 
-        // Fallback: scan shallow status-area elements for hospital time text.
-        const candidates = document.querySelectorAll(
-            '[class*="status"] li, [class*="icons"] li, ul.status-icons li, [class*="statusIcon"]'
-        );
-        for (const el of candidates) {
-            if (el.children.length > 4) continue;
-            const txt = el.textContent.trim();
-            if (/hospital/i.test(txt)) {
-                const m = parseMinutes(txt);
-                if (m > 0) return m;
-            }
-        }
-
-        return null; // not in hospital (or unable to detect)
+        console.log('[HealAdvisor] Could not detect hospital time. If you are in hospital, inspect the timer element in DevTools and share the HTML.');
+        return null;
     }
 
     // ─── Recommendation ───────────────────────────────────────────────────
     function recommend(hospMinutes) {
-        // Items whose cooldown expires before hospital time does — stackable heals.
         const fitting = ITEMS.filter(item => item.cooldownMinutes <= hospMinutes);
-
         if (fitting.length > 0) {
-            const best = fitting[fitting.length - 1]; // highest cooldown that fits
             return {
-                item: best,
-                note: `cooldown expires in hospital — stack another heal after`,
+                item: fitting[fitting.length - 1],
+                note: 'cooldown expires in hospital \u2014 stack another heal after',
             };
         }
-
-        // No item fits — hospital time is shorter than any item's cooldown.
-        // Use smallest to minimise post-discharge cooldown waste.
         return {
             item: ITEMS[0],
-            note: `short stay — use smallest to minimise post-discharge cooldown`,
+            note: 'short stay \u2014 use smallest to minimise post-discharge cooldown',
         };
     }
 
@@ -124,7 +126,6 @@
 
         const itemLabel = rec.item.name +
             (rec.item.displayNote ? ` (${rec.item.displayNote})` : '');
-        const cdText = `${rec.item.cooldownMinutes}min cd`;
 
         const b = document.createElement('div');
         b.className = 'heal-advisor-banner';
@@ -134,7 +135,6 @@
             'border-radius:0 0 8px 8px;box-shadow:0 2px 10px rgba(0,0,0,.6);' +
             'white-space:nowrap;font-family:sans-serif;user-select:none;pointer-events:none;';
 
-        // Build with DOM methods (avoid innerHTML with dynamic content).
         const label = document.createElement('span');
         label.style.color = '#95a5a6';
         label.textContent = 'Heal Advisor';
@@ -148,7 +148,7 @@
 
         const note = document.createElement('span');
         note.style.color = '#7f8c8d';
-        note.textContent = ` (${cdText} \u2014 ${rec.note})`;
+        note.textContent = ` (${rec.item.cooldownMinutes}min cd \u2014 ${rec.note})`;
 
         b.appendChild(label);
         b.appendChild(document.createTextNode(' \u2022 Hospital: '));
@@ -156,7 +156,6 @@
         b.appendChild(document.createTextNode(' \u2014 Use: '));
         b.appendChild(itemStrong);
         b.appendChild(note);
-
         document.body.appendChild(b);
     }
 
@@ -164,20 +163,23 @@
     function highlightItems(rec) {
         const targets = new Set(rec.item.matchNames.map(n => n.toLowerCase()));
 
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+        // Search within the items container; fall back to full body.
+        const root = document.querySelector('#mainContainer [class*="items-cont-wrap"]') ||
+                     document.querySelector('#mainContainer') ||
+                     document.body;
+
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
         const seen = new Set();
         let node;
 
         while ((node = walker.nextNode())) {
             if (!targets.has(node.textContent.trim().toLowerCase())) continue;
 
-            // Walk up to find a reasonable item container (LI, TR, or something with a button).
             let el = node.parentElement;
             for (let i = 0; i < 6; i++) {
                 if (!el || el === document.body) break;
-                const tag = el.tagName;
-                if (tag === 'LI' || tag === 'TR') break;
-                if ([...el.classList].some(c => /item/i.test(c))) break;
+                if (el.tagName === 'LI' || el.tagName === 'TR') break;
+                if ([...el.classList].some(c => /\bitem\b/i.test(c))) break;
                 if (el.querySelector('button, [class*="use"], [class*="btn"]')) break;
                 el = el.parentElement;
             }
@@ -206,7 +208,6 @@
     function cleanup() {
         const b = document.querySelector('.heal-advisor-banner');
         if (b) b.remove();
-
         for (const el of document.querySelectorAll('[data-heal-advisor]')) {
             el.style.outline = '';
             el.style.outlineOffset = '';
@@ -218,20 +219,47 @@
     }
 
     // ─── Run ──────────────────────────────────────────────────────────────
+    let retryObserver = null;
+
     function run() {
         cleanup();
         const hospMin = getHospitalMinutes();
-        if (!hospMin || hospMin <= 0) return;
+
+        if (!hospMin || hospMin <= 0) {
+            // Retry via MutationObserver in case the status bar hasn't rendered yet.
+            if (!retryObserver) {
+                retryObserver = new MutationObserver(() => {
+                    const mins = getHospitalMinutes();
+                    if (mins > 0) {
+                        retryObserver.disconnect();
+                        retryObserver = null;
+                        run();
+                    }
+                });
+                retryObserver.observe(document.body, { childList: true, subtree: true });
+                setTimeout(() => {
+                    if (retryObserver) {
+                        retryObserver.disconnect();
+                        retryObserver = null;
+                    }
+                }, 20000);
+            }
+            return;
+        }
+
+        if (retryObserver) {
+            retryObserver.disconnect();
+            retryObserver = null;
+        }
 
         const rec = recommend(hospMin);
         showBanner(hospMin, rec);
-        // Delay highlight to allow item list to finish rendering.
         setTimeout(() => highlightItems(rec), 500);
     }
 
-    // Wait for status bar to load, then run.
-    setTimeout(run, 2500);
-
-    // Re-run on SPA hash changes (e.g. navigating to faction armoury tab).
-    window.addEventListener('hashchange', () => setTimeout(run, 1000));
+    setTimeout(run, 2000);
+    window.addEventListener('hashchange', () => {
+        if (retryObserver) { retryObserver.disconnect(); retryObserver = null; }
+        setTimeout(run, 1000);
+    });
 })();
