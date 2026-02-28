@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      1.6
+// @version      1.7
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -15,6 +15,8 @@
 
 (function () {
     'use strict';
+
+    console.log('[HealAdvisor] script running on', window.location.pathname);
 
     // ─── Item config ──────────────────────────────────────────────────────
     // hospReduction: minutes removed from hospital timer on use
@@ -75,39 +77,54 @@
     function getHospitalMinutes() {
         // Confirmed format: aria-label="Hospital: Hospitalized by PlayerName"
         const hospLink = document.querySelector('[aria-label^="Hospital:"]');
-        if (!hospLink) return null;
+        if (!hospLink) {
+            console.log('[HealAdvisor] hospital link not found in DOM yet');
+            return null;
+        }
 
-        // Time is not in the aria-label — search the surrounding container.
+        // Try 1: surrounding container text.
         const container = hospLink.closest('li') ||
                           hospLink.closest('[class*="status"]') ||
                           hospLink.parentElement;
-
         if (container) {
             const mins = parseMinutes(container.textContent);
             if (mins > 0) return mins;
         }
 
-        // Fallback: any visible tooltip mentioning hospital.
+        // Try 2: i-data attribute — observed format "i_X_MINUTES_W_H" e.g. "i_10_175_17_17".
+        const iData = hospLink.getAttribute('i-data') || '';
+        const iMatch = iData.match(/^i_\d+_(\d+)_/);
+        if (iMatch) {
+            const mins = parseInt(iMatch[1], 10);
+            if (mins > 0) {
+                console.log('[HealAdvisor] time from i-data:', mins, 'min');
+                return mins;
+            }
+        }
+
+        // Try 3: any tooltip element.
         for (const el of document.querySelectorAll('[class*="tooltip" i]')) {
             if (!/hospital/i.test(el.textContent)) continue;
             const mins = parseMinutes(el.textContent);
             if (mins > 0) return mins;
         }
 
-        // Broad fallback: scan status area for standalone time strings.
-        const statusArea = hospLink.closest('[class*="icons" i], [class*="status" i], nav, header') ||
-                           document.body;
-        const walker = document.createTreeWalker(statusArea, NodeFilter.SHOW_TEXT, null);
+        // Try 4: full-page text scan for a time value (sanity-capped at 24h).
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
         let node;
         while ((node = walker.nextNode())) {
             const text = node.textContent.trim();
-            if (!text || text.length > 40) continue;
-            if (/^\d+\s*[hms]/.test(text) || /\d+\s*h\s*\d+\s*m/.test(text)) {
+            if (!text || text.length > 60) continue;
+            if (/\d+\s*[hms]/i.test(text) && !/price|cost|\$|ago/i.test(text)) {
                 const mins = parseMinutes(text);
-                if (mins > 0) return mins;
+                if (mins > 0 && mins < 1440) {
+                    console.log('[HealAdvisor] time from page scan:', text, '->', mins, 'min', node.parentElement);
+                    return mins;
+                }
             }
         }
 
+        console.log('[HealAdvisor] in hospital but cannot find time. Link:', hospLink.outerHTML, '/ Container:', container && container.outerHTML);
         return null;
     }
 
