@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      1.7
+// @version      1.8
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -93,6 +93,7 @@
 
         // Try 2: i-data attribute — observed format "i_X_MINUTES_W_H" e.g. "i_10_175_17_17".
         const iData = hospLink.getAttribute('i-data') || '';
+        console.log('[HealAdvisor] i-data value:', iData);
         const iMatch = iData.match(/^i_\d+_(\d+)_/);
         if (iMatch) {
             const mins = parseInt(iMatch[1], 10);
@@ -109,18 +110,20 @@
             if (mins > 0) return mins;
         }
 
-        // Try 4: full-page text scan for a time value (sanity-capped at 24h).
+        // Try 4: scan for STANDALONE time strings only (e.g. "2h 15m", "45m").
+        // Reject anything embedded in a sentence to avoid false matches.
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
         let node;
         while ((node = walker.nextNode())) {
             const text = node.textContent.trim();
-            if (!text || text.length > 60) continue;
-            if (/\d+\s*[hms]/i.test(text) && !/price|cost|\$|ago/i.test(text)) {
-                const mins = parseMinutes(text);
-                if (mins > 0 && mins < 1440) {
-                    console.log('[HealAdvisor] time from page scan:', text, '->', mins, 'min', node.parentElement);
-                    return mins;
-                }
+            if (!text) continue;
+            // Must be a pure time string — digits, h, m, s and spaces only.
+            if (!/^[\dhmsd\s]+$/.test(text)) continue;
+            if (!/\d+\s*h|\d+\s*m/i.test(text)) continue;
+            const mins = parseMinutes(text);
+            if (mins >= 1 && mins < 1440) {
+                console.log('[HealAdvisor] time from page scan:', text, '->', mins, 'min', node.parentElement);
+                return mins;
             }
         }
 
