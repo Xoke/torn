@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      1.2
+// @version      1.3
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -17,37 +17,46 @@
     'use strict';
 
     // ─── Item config ──────────────────────────────────────────────────────
-    // Adjust cooldownMinutes to match actual Torn values if these are off.
+    // hospReduction: minutes removed from hospital timer on use
+    // life:          % of max life restored
+    // cooldown:      medical cooldown imposed (minutes)
     //
-    // Strategy: find the highest-cooldown item whose cooldown still FITS within
-    // your remaining hospital time. That way the cooldown expires before you leave,
-    // letting you use another item — maximising total heals per hospital stay.
-    // If no item fits (hospital time < smallest cooldown), use the smallest item
-    // to minimise how long you're on cooldown after you're discharged.
+    // An item is worth using only when hospRemaining > cooldown
+    // (otherwise the cooldown costs more time than the item saves).
+    // Among usable items, highest hospReduction wins.
     const ITEMS = [
         {
             name: 'Small First Aid Kit',
-            cooldownMinutes: 30,
+            hospReduction: 20,
+            life: 5,
+            cooldown: 10,
             matchNames: ['Small First Aid Kit'],
         },
         {
             name: 'First Aid Kit',
-            cooldownMinutes: 60,
+            hospReduction: 40,
+            life: 10,
+            cooldown: 15,
             matchNames: ['First Aid Kit'],
         },
         {
-            name: 'Blood Bag',
-            cooldownMinutes: 90,
-            displayNote: 'check blood type compatibility',
-            matchNames: ['Blood Bag O', 'Blood Bag A', 'Blood Bag B', 'Blood Bag AB'],
-        },
-        {
             name: 'Morphine',
-            cooldownMinutes: 120,
+            hospReduction: 70,
+            life: 15,
+            cooldown: 20,
             matchNames: ['Morphine'],
         },
+        {
+            name: 'Blood Bag',
+            hospReduction: 120,
+            life: 30,
+            cooldown: 30,
+            displayNote: 'check blood type',
+            matchNames: ['Blood Bag O', 'Blood Bag A', 'Blood Bag B', 'Blood Bag AB'],
+        },
     ];
-    ITEMS.sort((a, b) => a.cooldownMinutes - b.cooldownMinutes);
+    // Sorted descending by reduction so recommend() can just grab the first usable item.
+    ITEMS.sort((a, b) => b.hospReduction - a.hospReduction);
 
     // ─── Hospital time parsing ────────────────────────────────────────────
     function parseMinutes(str) {
@@ -64,39 +73,27 @@
 
     function getHospitalMinutes() {
         // Confirmed format: aria-label="Hospital: Hospitalized by PlayerName"
-        // The time is NOT in the aria-label — find it in the surrounding DOM.
         const hospLink = document.querySelector('[aria-label^="Hospital:"]');
-        if (!hospLink) {
-            return null; // not in hospital
-        }
+        if (!hospLink) return null;
 
-        // Search the closest list item / status container for a time text node.
+        // Time is not in the aria-label — search the surrounding container.
         const container = hospLink.closest('li') ||
                           hospLink.closest('[class*="status"]') ||
                           hospLink.parentElement;
 
         if (container) {
             const mins = parseMinutes(container.textContent);
-            if (mins > 0) {
-                console.log('[HealAdvisor] time found in container:', container.textContent.trim(), '->', mins, 'min');
-                return mins;
-            }
-            // Log the container HTML so we can find where the time is rendered.
-            console.log('[HealAdvisor] in hospital but no time in container. Container HTML:', container.outerHTML);
+            if (mins > 0) return mins;
         }
 
-        // Check for any visible tooltip element that mentions hospital time.
-        for (const el of document.querySelectorAll('[class*="tooltip" i], [class*="Tooltip"]')) {
+        // Fallback: any visible tooltip mentioning hospital.
+        for (const el of document.querySelectorAll('[class*="tooltip" i]')) {
             if (!/hospital/i.test(el.textContent)) continue;
             const mins = parseMinutes(el.textContent);
-            if (mins > 0) {
-                console.log('[HealAdvisor] time found in tooltip:', el.textContent.trim());
-                return mins;
-            }
+            if (mins > 0) return mins;
         }
 
-        // Broad fallback: scan all small text nodes for a time pattern near the icon.
-        // The time might be a sibling element rendered separately from the icon.
+        // Broad fallback: scan status area for standalone time strings.
         const statusArea = hospLink.closest('[class*="icons" i], [class*="status" i], nav, header') ||
                            document.body;
         const walker = document.createTreeWalker(statusArea, NodeFilter.SHOW_TEXT, null);
@@ -106,30 +103,30 @@
             if (!text || text.length > 40) continue;
             if (/^\d+\s*[hms]/.test(text) || /\d+\s*h\s*\d+\s*m/.test(text)) {
                 const mins = parseMinutes(text);
-                if (mins > 0) {
-                    console.log('[HealAdvisor] time found via broad scan:', text, node.parentElement);
-                    return mins;
-                }
+                if (mins > 0) return mins;
             }
         }
 
-        console.log('[HealAdvisor] in hospital but cannot find time. Paste the hospital icon HTML from DevTools.');
         return null;
     }
 
     // ─── Recommendation ───────────────────────────────────────────────────
+    // Returns the best item to use now, and (if applicable) what to use next
+    // after the cooldown expires.
     function recommend(hospMinutes) {
-        const fitting = ITEMS.filter(item => item.cooldownMinutes <= hospMinutes);
-        if (fitting.length > 0) {
-            return {
-                item: fitting[fitting.length - 1],
-                note: 'cooldown expires in hospital \u2014 stack another heal after',
-            };
-        }
-        return {
-            item: ITEMS[0],
-            note: 'short stay \u2014 use smallest to minimise post-discharge cooldown',
-        };
+        // An item is worth using if hospMinutes > item.cooldown (net positive).
+        const best = ITEMS.find(item => hospMinutes > item.cooldown) || null;
+        if (!best) return { item: null, next: null };
+
+        // After using best: hospital time reduced, then cooldown ticks down.
+        const hospAfterReduction = Math.max(0, hospMinutes - best.hospReduction);
+        const hospAfterCooldown  = Math.max(0, hospAfterReduction - best.cooldown);
+
+        const next = hospAfterCooldown > 0
+            ? (ITEMS.find(item => hospAfterCooldown > item.cooldown) || null)
+            : null;
+
+        return { item: best, hospAfterCooldown, next };
     }
 
     // ─── Banner ───────────────────────────────────────────────────────────
@@ -143,9 +140,6 @@
     function showBanner(hospMin, rec) {
         if (document.querySelector('.heal-advisor-banner')) return;
 
-        const itemLabel = rec.item.name +
-            (rec.item.displayNote ? ` (${rec.item.displayNote})` : '');
-
         const b = document.createElement('div');
         b.className = 'heal-advisor-banner';
         b.style.cssText =
@@ -154,35 +148,42 @@
             'border-radius:0 0 8px 8px;box-shadow:0 2px 10px rgba(0,0,0,.6);' +
             'white-space:nowrap;font-family:sans-serif;user-select:none;pointer-events:none;';
 
-        const label = document.createElement('span');
-        label.style.color = '#95a5a6';
-        label.textContent = 'Heal Advisor';
+        const grey  = s => Object.assign(document.createElement('span'), { textContent: s, style: 'color:#7f8c8d' });
+        const green = s => Object.assign(document.createElement('span'), { textContent: s, style: 'color:#2ecc71;font-weight:bold' });
+        const dim   = s => Object.assign(document.createElement('span'), { textContent: s, style: 'color:#95a5a6' });
 
-        const timeStrong = document.createElement('strong');
-        timeStrong.textContent = fmtMin(hospMin);
+        b.appendChild(grey('Heal Advisor'));
+        b.appendChild(document.createTextNode(` \u2022 Hospital: `));
+        b.appendChild(Object.assign(document.createElement('strong'), { textContent: fmtMin(hospMin) }));
+        b.appendChild(document.createTextNode(' \u2014 '));
 
-        const itemStrong = document.createElement('span');
-        itemStrong.style.cssText = 'color:#2ecc71;font-weight:bold;';
-        itemStrong.textContent = itemLabel;
+        if (!rec.item) {
+            b.appendChild(dim('Wait it out (too short for any item to help)'));
+        } else {
+            const label = rec.item.name + (rec.item.displayNote ? ` (${rec.item.displayNote})` : '');
+            b.appendChild(document.createTextNode('Use: '));
+            b.appendChild(green(label));
+            b.appendChild(dim(` (\u2212${rec.item.hospReduction}min hosp, +${rec.item.cooldown}min cd)`));
 
-        const note = document.createElement('span');
-        note.style.color = '#7f8c8d';
-        note.textContent = ` (${rec.item.cooldownMinutes}min cd \u2014 ${rec.note})`;
+            if (rec.next) {
+                const nextLabel = rec.next.name + (rec.next.displayNote ? ` (${rec.next.displayNote})` : '');
+                b.appendChild(document.createTextNode(' \u2192 '));
+                b.appendChild(dim(`${fmtMin(rec.hospAfterCooldown)} left \u2192 `));
+                b.appendChild(green(nextLabel));
+                b.appendChild(dim(` again`));
+            } else if (rec.hospAfterCooldown === 0) {
+                b.appendChild(dim(' \u2192 out of hospital'));
+            }
+        }
 
-        b.appendChild(label);
-        b.appendChild(document.createTextNode(' \u2022 Hospital: '));
-        b.appendChild(timeStrong);
-        b.appendChild(document.createTextNode(' \u2014 Use: '));
-        b.appendChild(itemStrong);
-        b.appendChild(note);
         document.body.appendChild(b);
     }
 
     // ─── Inline highlight ─────────────────────────────────────────────────
     function highlightItems(rec) {
+        if (!rec.item) return;
         const targets = new Set(rec.item.matchNames.map(n => n.toLowerCase()));
 
-        // Search within the items container; fall back to full body.
         const root = document.querySelector('#mainContainer [class*="items-cont-wrap"]') ||
                      document.querySelector('#mainContainer') ||
                      document.body;
@@ -245,7 +246,6 @@
         const hospMin = getHospitalMinutes();
 
         if (!hospMin || hospMin <= 0) {
-            // Retry via MutationObserver in case the status bar hasn't rendered yet.
             if (!retryObserver) {
                 retryObserver = new MutationObserver(() => {
                     const mins = getHospitalMinutes();
@@ -257,19 +257,13 @@
                 });
                 retryObserver.observe(document.body, { childList: true, subtree: true });
                 setTimeout(() => {
-                    if (retryObserver) {
-                        retryObserver.disconnect();
-                        retryObserver = null;
-                    }
+                    if (retryObserver) { retryObserver.disconnect(); retryObserver = null; }
                 }, 20000);
             }
             return;
         }
 
-        if (retryObserver) {
-            retryObserver.disconnect();
-            retryObserver = null;
-        }
+        if (retryObserver) { retryObserver.disconnect(); retryObserver = null; }
 
         const rec = recommend(hospMin);
         showBanner(hospMin, rec);
