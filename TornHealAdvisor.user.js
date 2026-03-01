@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      1.9
+// @version      2.0
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -15,8 +15,6 @@
 
 (function () {
     'use strict';
-
-    console.log('[HealAdvisor] script running on', window.location.pathname);
 
     // ─── Item config ──────────────────────────────────────────────────────
     // hospReduction: minutes removed from hospital timer on use
@@ -32,21 +30,22 @@
             hospReduction: 20,
             life: 5,
             cooldown: 10,
-            matchNames: ['Small First Aid Kit'],
+            matchPrefix: 'small first aid kit',
         },
         {
             name: 'First Aid Kit',
             hospReduction: 40,
             life: 10,
             cooldown: 15,
-            matchNames: ['First Aid Kit'],
+            matchPrefix: 'first aid kit',
+            excludePattern: /small/i,
         },
         {
             name: 'Morphine',
             hospReduction: 70,
             life: 15,
             cooldown: 20,
-            matchNames: ['Morphine'],
+            matchPrefix: 'morphine',
         },
         {
             name: 'Blood Bag',
@@ -54,14 +53,54 @@
             life: 30,
             cooldown: 30,
             displayNote: 'check blood type',
-            matchNames: ['Blood Bag'],
-            excludePattern: /irradiated/i,  // never recommend Irradiated Blood Bags
+            matchPrefix: 'blood bag',
+            excludePattern: /irradiated/i,
         },
     ];
-    // Sorted descending by reduction so recommend() can just grab the first usable item.
     ITEMS.sort((a, b) => b.hospReduction - a.hospReduction);
 
-    // ─── Hospital time parsing ────────────────────────────────────────────
+    // ─── Hospital time detection ──────────────────────────────────────────
+    function detectHospitalMinutes(callback) {
+        // Primary: window.topBannerInitData contains hospitalStamp (Unix seconds).
+        const stamp = window.topBannerInitData &&
+                      window.topBannerInitData.user &&
+                      window.topBannerInitData.user.data &&
+                      window.topBannerInitData.user.data.hospitalStamp;
+        if (stamp) {
+            const mins = (stamp * 1000 - Date.now()) / 60000;
+            if (mins > 0) { callback(mins); return; }
+        }
+
+        // Fallback: hospital link in status bar + container text (works on factions.php).
+        const hospLink = document.querySelector('[aria-label^="Hospital:"]');
+        if (!hospLink) { callback(null); return; }
+
+        const container = hospLink.closest('li') ||
+                          hospLink.closest('[class*="status"]') ||
+                          hospLink.parentElement;
+        if (container) {
+            const mins = parseMinutes(container.textContent);
+            if (mins > 0) { callback(mins); return; }
+        }
+
+        // Last resort: trigger hover to render tooltip.
+        hospLink.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        hospLink.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+        setTimeout(() => {
+            for (const el of document.querySelectorAll('[class*="tooltip" i], [role="tooltip"]')) {
+                if (!/hospital/i.test(el.textContent)) continue;
+                const mins = parseMinutes(el.textContent);
+                if (mins > 0) {
+                    hospLink.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+                    callback(mins);
+                    return;
+                }
+            }
+            hospLink.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+            callback(null);
+        }, 400);
+    }
+
     function parseMinutes(str) {
         if (!str) return 0;
         let m = 0;
@@ -74,86 +113,13 @@
         return m;
     }
 
-    // Calls callback(minutes) asynchronously. Tries sync approaches first,
-    // then falls back to triggering a hover to render the tooltip.
-    function detectHospitalMinutes(callback) {
-        const hospLink = document.querySelector('[aria-label^="Hospital:"]');
-        if (!hospLink) {
-            console.log('[HealAdvisor] hospital link not found in DOM yet');
-            callback(null);
-            return;
-        }
-
-        // Try 1: container text (works on factions.php).
-        const container = hospLink.closest('li') ||
-                          hospLink.closest('[class*="status"]') ||
-                          hospLink.parentElement;
-        if (container) {
-            const mins = parseMinutes(container.textContent);
-            if (mins > 0) { callback(mins); return; }
-
-            // Try countdown element inside the container (data-end / data-seconds).
-            for (const cd of container.querySelectorAll('[data-end], [data-seconds]')) {
-                const end = parseInt(cd.getAttribute('data-end') || '0', 10);
-                if (end > 0) {
-                    const ms = end - Date.now();
-                    if (ms > 60000 && ms < 86400000) { callback(ms / 60000); return; }
-                }
-                const secs = parseInt(cd.getAttribute('data-seconds') || '0', 10);
-                if (secs > 60 && secs < 86400) { callback(secs / 60); return; }
-            }
-        }
-
-        // Try 2: i-data attribute (works on some pages).
-        const iData = hospLink.getAttribute('i-data') || '';
-        const iMatch = iData.match(/^i_\d+_(\d+)_/);
-        if (iMatch) {
-            const mins = parseInt(iMatch[1], 10);
-            if (mins > 0) { console.log('[HealAdvisor] time from i-data:', mins); callback(mins); return; }
-        }
-
-        // Try 3: any already-visible tooltip mentioning hospital.
-        for (const el of document.querySelectorAll('[class*="tooltip" i], [role="tooltip"]')) {
-            if (!/hospital/i.test(el.textContent)) continue;
-            const mins = parseMinutes(el.textContent);
-            if (mins > 0) { callback(mins); return; }
-        }
-
-        // Try 4: trigger hover on the hospital icon to render its tooltip, then read it.
-        console.log('[HealAdvisor] sync detection failed — trying hover tooltip. Container HTML:', container && container.outerHTML);
-        hospLink.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-        hospLink.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-
-        setTimeout(() => {
-            for (const el of document.querySelectorAll('[class*="tooltip" i], [role="tooltip"]')) {
-                const text = el.textContent || '';
-                if (!/hospital/i.test(text)) continue;
-                const mins = parseMinutes(text);
-                if (mins > 0) {
-                    hospLink.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
-                    console.log('[HealAdvisor] time from hover tooltip:', mins, 'min —', text.trim());
-                    callback(mins);
-                    return;
-                }
-            }
-            hospLink.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
-            console.log('[HealAdvisor] all detection methods failed');
-            callback(null);
-        }, 400);
-    }
-
     // ─── Recommendation ───────────────────────────────────────────────────
-    // Returns the best item to use now, and (if applicable) what to use next
-    // after the cooldown expires.
     function recommend(hospMinutes) {
-        // An item is worth using if hospMinutes > item.cooldown (net positive).
         const best = ITEMS.find(item => hospMinutes > item.cooldown) || null;
-        if (!best) return { item: null, next: null };
+        if (!best) return { item: null, hospAfterCooldown: 0, next: null };
 
-        // After using best: hospital time reduced, then cooldown ticks down.
         const hospAfterReduction = Math.max(0, hospMinutes - best.hospReduction);
         const hospAfterCooldown  = Math.max(0, hospAfterReduction - best.cooldown);
-
         const next = hospAfterCooldown > 0
             ? (ITEMS.find(item => hospAfterCooldown > item.cooldown) || null)
             : null;
@@ -185,7 +151,7 @@
         const dim   = s => Object.assign(document.createElement('span'), { textContent: s, style: 'color:#95a5a6' });
 
         b.appendChild(grey('Heal Advisor'));
-        b.appendChild(document.createTextNode(` \u2022 Hospital: `));
+        b.appendChild(document.createTextNode(' \u2022 Hospital: '));
         b.appendChild(Object.assign(document.createElement('strong'), { textContent: fmtMin(hospMin) }));
         b.appendChild(document.createTextNode(' \u2014 '));
 
@@ -202,7 +168,7 @@
                 b.appendChild(document.createTextNode(' \u2192 '));
                 b.appendChild(dim(`${fmtMin(rec.hospAfterCooldown)} left \u2192 `));
                 b.appendChild(green(nextLabel));
-                b.appendChild(dim(` again`));
+                b.appendChild(dim(' again'));
             } else if (rec.hospAfterCooldown === 0) {
                 b.appendChild(dim(' \u2192 out of hospital'));
             }
@@ -212,40 +178,64 @@
     }
 
     // ─── Inline highlight ─────────────────────────────────────────────────
-    function textMatchesItem(text, item) {
-        const t = text.trim().toLowerCase();
+    function itemNameMatches(name, item) {
+        const t = name.trim().toLowerCase();
         if (item.excludePattern && item.excludePattern.test(t)) return false;
-        return item.matchNames.some(name => t === name.toLowerCase() || t.includes(name.toLowerCase()));
+        return t === item.matchPrefix || t.startsWith(item.matchPrefix + ' ') ||
+               t.startsWith(item.matchPrefix + ':') || t.includes(item.matchPrefix);
     }
 
     function highlightItems(rec) {
         if (!rec.item) return;
 
-        const root = document.querySelector('#mainContainer [class*="items-cont-wrap"]') ||
-                     document.querySelector('#mainContainer') ||
-                     document.body;
+        // On item.php: items are li[data-category="Medical"] with data-sort for name and data-qty for quantity.
+        const medicalLis = document.querySelectorAll('li[data-category="Medical"]');
+        if (medicalLis.length > 0) {
+            for (const li of medicalLis) {
+                const qty = parseInt(li.getAttribute('data-qty') || '0', 10);
+                if (qty === 0) continue; // skip empty items
 
-        // Search leaf-ish elements whose text content matches the item name.
-        const seen = new Set();
+                // data-sort = "1 Blood Bag : A+" — strip leading sort key
+                const sort = (li.getAttribute('data-sort') || '').replace(/^\S+\s+/, '');
+                if (!itemNameMatches(sort, rec.item)) continue;
+                if (li.dataset.healAdvisor) continue;
+
+                li.dataset.healAdvisor = '1';
+                li.style.outline = '2px solid #2ecc71';
+                li.style.outlineOffset = '2px';
+                li.style.borderRadius = '4px';
+
+                const nameEl = li.querySelector('.name');
+                if (nameEl && !nameEl.querySelector('.heal-advisor-badge')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'heal-advisor-badge';
+                    badge.textContent = 'Use';
+                    badge.style.cssText =
+                        'background:#2ecc71;color:#111;font-size:10px;font-weight:bold;' +
+                        'padding:1px 5px;border-radius:3px;margin-left:5px;vertical-align:middle;';
+                    nameEl.appendChild(badge);
+                }
+            }
+            return;
+        }
+
+        // Fallback for factions.php armoury (different DOM structure).
+        const root = document.querySelector('#mainContainer') || document.body;
         for (const el of root.querySelectorAll('*')) {
-            // Skip elements that contain many children — they're containers, not name labels.
             if (el.children.length > 3) continue;
-            if (!textMatchesItem(el.textContent, rec.item)) continue;
+            if (!itemNameMatches(el.textContent, rec.item)) continue;
 
-            // Walk up to find a sensible item card container.
             let card = el;
             for (let i = 0; i < 6; i++) {
                 if (!card.parentElement || card.parentElement === document.body) break;
                 const p = card.parentElement;
                 if (p.tagName === 'LI' || p.tagName === 'TR') { card = p; break; }
                 if ([...p.classList].some(c => /\bitem\b/i.test(c))) { card = p; break; }
-                if (p.querySelector('button, [class*="use"], [class*="btn"]')) { card = p; break; }
+                if (p.querySelector('button')) { card = p; break; }
                 card = p;
             }
 
-            if (seen.has(card)) continue;
-            seen.add(card);
-
+            if (card.dataset.healAdvisor) continue;
             card.dataset.healAdvisor = '1';
             card.style.outline = '2px solid #2ecc71';
             card.style.outlineOffset = '2px';
@@ -283,16 +273,9 @@
 
     function startHighlightObserver(rec) {
         if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
-
-        // Watch the items container for DOM changes (lazy-loaded items on item.php).
-        const root = document.querySelector('#mainContainer [class*="items-cont-wrap"]') ||
-                     document.querySelector('#mainContainer') ||
-                     document.body;
-
+        const root = document.querySelector('#mainContainer') || document.body;
         highlightObserver = new MutationObserver(() => highlightItems(rec));
         highlightObserver.observe(root, { childList: true, subtree: true });
-
-        // Stop watching after 30s — items should all be loaded by then.
         setTimeout(() => {
             if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
         }, 30000);
@@ -306,7 +289,11 @@
             if (!hospMin || hospMin <= 0) {
                 if (!retryObserver) {
                     retryObserver = new MutationObserver(() => {
-                        if (document.querySelector('[aria-label^="Hospital:"]')) {
+                        const stamp = window.topBannerInitData &&
+                                      window.topBannerInitData.user &&
+                                      window.topBannerInitData.user.data &&
+                                      window.topBannerInitData.user.data.hospitalStamp;
+                        if (stamp || document.querySelector('[aria-label^="Hospital:"]')) {
                             retryObserver.disconnect();
                             retryObserver = null;
                             run();
