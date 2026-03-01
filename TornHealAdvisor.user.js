@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      2.0
+// @version      2.1
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -182,7 +182,7 @@
         const t = name.trim().toLowerCase();
         if (item.excludePattern && item.excludePattern.test(t)) return false;
         return t === item.matchPrefix || t.startsWith(item.matchPrefix + ' ') ||
-               t.startsWith(item.matchPrefix + ':') || t.includes(item.matchPrefix);
+               t.startsWith(item.matchPrefix + ':');
     }
 
     function highlightItems(rec) {
@@ -218,6 +218,11 @@
             }
             return;
         }
+
+        // On item.php the Medical items simply haven't rendered yet — bail out and
+        // let the MutationObserver retry once they appear. Never run the broad
+        // fallback scan on this page as it matches far too many elements.
+        if (location.pathname === '/item.php') return;
 
         // Fallback for factions.php armoury (different DOM structure).
         const root = document.querySelector('#mainContainer') || document.body;
