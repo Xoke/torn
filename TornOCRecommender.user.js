@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      1.7
+// @version      1.8
 // @run-at       document-end
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
@@ -132,46 +132,11 @@
         return titleEl ? titleEl.textContent.trim() : 'Unknown Role';
     }
 
-    // Get the current player's name from the page header
-    function getCurrentPlayerName() {
-        // Try user-information sidebar: <span class="bold">Name:</span> followed by text
-        const userInfo = document.querySelector('.user-information');
-        if (userInfo) {
-            const spans = userInfo.querySelectorAll('span.bold');
-            for (const span of spans) {
-                if (span.textContent.trim() === 'Name:') {
-                    const li = span.parentElement;
-                    if (li) {
-                        const name = li.textContent.replace('Name:', '').trim();
-                        if (name) return name;
-                    }
-                }
-            }
-        }
-        // Fallback: try menu-name style header
-        const nameLabel = document.querySelector('[class*="menu-name___"]');
-        if (nameLabel && nameLabel.parentElement) {
-            const honorText = nameLabel.parentElement.querySelector('.honor-text');
-            if (honorText) return honorText.textContent.trim();
-        }
-        return null;
-    }
-
-    // Check if the current player is already in any OC
-    function isPlayerInOC(playerName) {
-        const crimeCards = document.querySelectorAll('[data-oc-id]');
-        for (const card of crimeCards) {
-            const slots = card.querySelectorAll('[class*="wrapper___"][class*="success"]');
-            for (const slot of slots) {
-                if (!slot.querySelector('[class*="slotHeader___"]')) continue;
-                if (isEmptySlot(slot)) continue;
-                const honorTexts = slot.querySelectorAll('.honor-text');
-                for (const ht of honorTexts) {
-                    if (ht.textContent.trim() === playerName) return true;
-                }
-            }
-        }
-        return false;
+    // Check if the current player is already committed to an OC.
+    // In OC2, the current player's own slot carries 'active___' alongside 'wrapper___'.
+    // Other members' filled slots use plain 'wrapper___' (no 'active___'), so this is unambiguous.
+    function isPlayerInOC() {
+        return !!document.querySelector('[data-oc-id] [class*="wrapper___"][class*="active___"]');
     }
 
     // Check if slot meets threshold for its level
@@ -361,9 +326,8 @@
         try {
         clearRecommendations();
 
-        const playerName = getCurrentPlayerName();
-        if (playerName && isPlayerInOC(playerName)) {
-            debugLog(playerName, 'is already in an OC, skipping recommendations');
+        if (isPlayerInOC()) {
+            debugLog('Player is already in an OC, skipping recommendations');
             return;
         }
 
