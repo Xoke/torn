@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      2.1
+// @version      2.2
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/item.php*
@@ -220,42 +220,43 @@
         }
 
         // On item.php the Medical items simply haven't rendered yet — bail out and
-        // let the MutationObserver retry once they appear. Never run the broad
-        // fallback scan on this page as it matches far too many elements.
+        // let the MutationObserver retry once they appear.
         if (location.pathname === '/item.php') return;
 
-        // Fallback for factions.php armoury (different DOM structure).
-        const root = document.querySelector('#mainContainer') || document.body;
-        for (const el of root.querySelectorAll('*')) {
-            if (el.children.length > 3) continue;
-            if (!itemNameMatches(el.textContent, rec.item)) continue;
+        // On factions.php armoury: items are li.clearfix inside .medical-items.
+        // Item name is on the img[alt] attribute; quantity in .item-amount.
+        const armouryLis = document.querySelectorAll('.medical-items li');
+        if (armouryLis.length > 0) {
+            for (const li of armouryLis) {
+                const img = li.querySelector('img[alt]');
+                if (!img) continue;
+                if (!itemNameMatches(img.getAttribute('alt'), rec.item)) continue;
 
-            let card = el;
-            for (let i = 0; i < 6; i++) {
-                if (!card.parentElement || card.parentElement === document.body) break;
-                const p = card.parentElement;
-                if (p.tagName === 'LI' || p.tagName === 'TR') { card = p; break; }
-                if ([...p.classList].some(c => /\bitem\b/i.test(c))) { card = p; break; }
-                if (p.querySelector('button')) { card = p; break; }
-                card = p;
+                const qtyEl = li.querySelector('.item-amount');
+                const qty = qtyEl ? parseInt(qtyEl.textContent.trim(), 10) : 0;
+                if (qty === 0) continue;
+
+                if (li.dataset.healAdvisor) continue;
+                li.dataset.healAdvisor = '1';
+                li.style.outline = '2px solid #2ecc71';
+                li.style.outlineOffset = '2px';
+                li.style.borderRadius = '4px';
+
+                const nameEl = li.querySelector('.name-wrap');
+                if (nameEl && !nameEl.querySelector('.heal-advisor-badge')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'heal-advisor-badge';
+                    badge.textContent = 'Use';
+                    badge.style.cssText =
+                        'background:#2ecc71;color:#111;font-size:10px;font-weight:bold;' +
+                        'padding:1px 5px;border-radius:3px;margin-left:5px;vertical-align:middle;';
+                    nameEl.appendChild(badge);
+                }
             }
-
-            if (card.dataset.healAdvisor) continue;
-            card.dataset.healAdvisor = '1';
-            card.style.outline = '2px solid #2ecc71';
-            card.style.outlineOffset = '2px';
-            card.style.borderRadius = '4px';
-
-            if (!el.querySelector('.heal-advisor-badge')) {
-                const badge = document.createElement('span');
-                badge.className = 'heal-advisor-badge';
-                badge.textContent = 'Use';
-                badge.style.cssText =
-                    'background:#2ecc71;color:#111;font-size:10px;font-weight:bold;' +
-                    'padding:1px 5px;border-radius:3px;margin-left:5px;vertical-align:middle;';
-                el.appendChild(badge);
-            }
+            return;
         }
+
+        // Armoury not yet rendered — MutationObserver will retry.
     }
 
     // ─── Cleanup ──────────────────────────────────────────────────────────
