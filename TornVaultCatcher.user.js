@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Vault Catcher
 // @namespace    https://xoke.org/
-// @version      1.4
+// @version      1.6
 // @description  Warns when giving a faction member more money than their vault balance
 // @author       Xoke (based on VaultCatcher by Lazerpent [2112641])
 // @match        https://www.torn.com/factions.php*
@@ -163,12 +163,23 @@
         if (!container) return;
         if (container.querySelector('.vault-catcher-fill-btn')) return;
 
-        // Find the money input group (not inside depositor list)
-        const allGroups = container.querySelectorAll('.input-money-group');
+        // Find the money input group by anchoring to the give-money radio button.
+        // Both the money and points panels share the same .input-money-group class,
+        // so grabbing the first match is ambiguous after a re-render. Walking up from
+        // the radio button guarantees we stay in the correct (money) panel.
         var moneyGroup = null;
-        for (const group of allGroups) {
-            if (!group.closest('li')) { moneyGroup = group; break; }
+        const radioAnchor = document.getElementById('give-money') ||
+                            document.getElementById('add-money-to-balance');
+        if (radioAnchor) {
+            let el = radioAnchor.parentElement;
+            while (el && el !== container) {
+                const group = el.querySelector('.input-money-group');
+                if (group && !group.closest('li')) { moneyGroup = group; break; }
+                el = el.parentElement;
+            }
         }
+        // If radio buttons aren't present (e.g. confirm dialog is showing, or React
+        // mid-render), bail out. The observer will retry once the form stabilises.
         if (!moneyGroup) return;
 
         var btn = document.createElement('button');
@@ -216,10 +227,13 @@
 
         addFillBalanceButton();
 
-        // Watch for React re-renders that destroy our button (e.g. user selection)
+        // Watch for React re-renders that destroy our button (e.g. user selection).
+        // Debounce so we wait for React to finish before trying to re-add.
+        var fillBtnTimer = null;
         var btnObserver = new MutationObserver(function () {
             if (!container.querySelector('.vault-catcher-fill-btn')) {
-                addFillBalanceButton();
+                clearTimeout(fillBtnTimer);
+                fillBtnTimer = setTimeout(addFillBalanceButton, 300);
             }
         });
         btnObserver.observe(container, { childList: true, subtree: true });
