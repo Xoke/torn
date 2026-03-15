@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      1.9
+// @version      2.0
 // @run-at       document-end
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
@@ -132,54 +132,16 @@
         return titleEl ? titleEl.textContent.trim() : 'Unknown Role';
     }
 
-    // Get the current player's name from the page header (cached for session)
-    let cachedPlayerName = null;
-    function getCurrentPlayerName() {
-        if (cachedPlayerName !== null) return cachedPlayerName;
-        // Try user-information sidebar: <span class="bold">Name:</span> followed by text
-        const userInfo = document.querySelector('.user-information');
-        if (userInfo) {
-            const spans = userInfo.querySelectorAll('span.bold');
-            for (const span of spans) {
-                if (span.textContent.trim() === 'Name:') {
-                    const li = span.parentElement;
-                    if (li) {
-                        const name = li.textContent.replace('Name:', '').trim();
-                        if (name) {
-                            cachedPlayerName = name;
-                            return name;
-                        }
-                    }
-                }
-            }
-        }
-        // Fallback: try menu-name style header
-        const nameLabel = document.querySelector('[class*="menu-name___"]');
-        if (nameLabel && nameLabel.parentElement) {
-            const honorText = nameLabel.parentElement.querySelector('.honor-text');
-            if (honorText) {
-                cachedPlayerName = honorText.textContent.trim();
-                return cachedPlayerName;
-            }
-        }
-        return null;
-    }
-
-    // Check if the current player is already in any OC
-    function isPlayerInOC(playerName) {
-        const crimeCards = document.querySelectorAll('[data-oc-id]');
-        for (const card of crimeCards) {
-            const slots = card.querySelectorAll('[class*="wrapper___"][class*="success"]');
-            for (const slot of slots) {
-                if (!slot.querySelector('[class*="slotHeader___"]')) continue;
-                if (isEmptySlot(slot)) continue;
-                const honorTexts = slot.querySelectorAll('.honor-text');
-                for (const ht of honorTexts) {
-                    if (ht.textContent.trim() === playerName) return true;
-                }
-            }
-        }
-        return false;
+    // Check if the current player is already in an active OC by reading the
+    // sidebar info icon aria-label (class pattern: icon89___XXXXX).
+    // The label reads e.g. "Organized Crime: Bomber in Blast from the Past4 of 6 slots filled"
+    // when in an OC, or something without a role name when not in one.
+    function isPlayerInOC() {
+        const ocLink = document.querySelector('[class*="icon89___"] a');
+        if (!ocLink) return false;
+        const label = ocLink.getAttribute('aria-label') || '';
+        // Must start with "Organized Crime:" and contain a role (i.e. not just a generic "no crime" message)
+        return label.startsWith('Organized Crime:') && label.includes(' in ');
     }
 
     // Check if slot meets threshold for its level
@@ -369,9 +331,8 @@
         try {
         clearRecommendations();
 
-        const playerName = getCurrentPlayerName();
-        if (playerName && isPlayerInOC(playerName)) {
-            debugLog(playerName, 'is already in an OC, skipping recommendations');
+        if (isPlayerInOC()) {
+            debugLog('Player is already in an OC, skipping recommendations');
             return;
         }
 

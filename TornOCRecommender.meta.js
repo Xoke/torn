@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      1.9
+// @version      2.0
 // @run-at       document-end
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
