@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      2.7
+// @version      2.9
 // @run-at       document-end
-// @description  Highlights low success OC participants, stalled OCs, and missing items
+// @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
 // @homepageURL  https://github.com/Xoke/torn
@@ -105,9 +105,107 @@
         return false;
     }
 
-    // Check if a slot has a missing item
+    // Check if a slot has a missing item (new Torn UI uses inactive___ class on the slot icon)
     function hasMissingItem(slotElement) {
-        return !!slotElement.querySelector('[class*="itemHavefalse"], [class*="OC2-itemHavefalse"]');
+        return !!slotElement.querySelector('[class*="inactive___"]');
+    }
+
+    // Get the slotHeader button within a slot wrapper
+    function getSlotHeader(slotElement) {
+        return slotElement.querySelector('[class*="slotHeader___"]');
+    }
+
+    // Inject label styles once
+    (function injectLabelStyles() {
+        const LABEL_STYLE_ID = 'oc-missing-item-label-styles';
+        if (document.getElementById(LABEL_STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = LABEL_STYLE_ID;
+        style.textContent = `
+            .oc-missing-label {
+                position: absolute;
+                top: -22px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #aa00ff;
+                color: #fff;
+                font-size: 10px;
+                font-weight: bold;
+                padding: 2px 7px;
+                border-radius: 4px;
+                white-space: nowrap;
+                pointer-events: none;
+                z-index: 9999;
+                font-family: sans-serif;
+                letter-spacing: 0.3px;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+            }
+        `;
+        document.head.appendChild(style);
+    })();
+
+    // Briefly trigger a slot's tooltip to read "Used item: X", then dismiss it.
+    // Returns a Promise<string> with the item name, or '?' if not found.
+    function getItemName(slotHeader) {
+        return new Promise(resolve => {
+            slotHeader.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, cancelable: true }));
+            slotHeader.dispatchEvent(new MouseEvent('mouseover',  { bubbles: true, cancelable: true }));
+            setTimeout(() => {
+                const tooltip = document.querySelector('[role="tooltip"]');
+                let itemName = null;
+                if (tooltip) {
+                    const match = tooltip.textContent.match(/Used item:\s*(.+?)(?:\n|$)/);
+                    if (match) itemName = match[1].trim();
+                }
+                slotHeader.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true, cancelable: true }));
+                slotHeader.dispatchEvent(new MouseEvent('mouseout',   { bubbles: true, cancelable: true }));
+                resolve(itemName || '?');
+            }, 300);
+        });
+    }
+
+    // Add a missing item label above the slot header button
+    function applyMissingLabel(slotHeader, itemName) {
+        if (slotHeader.querySelector('.oc-missing-label')) return; // already labelled
+        const label = document.createElement('div');
+        label.className = 'oc-missing-label';
+        label.textContent = `\u2298 ${itemName}`;
+        slotHeader.style.position = 'relative';
+        slotHeader.appendChild(label);
+    }
+
+    // Remove all missing item labels (called on full clear/re-run)
+    function clearMissingLabels() {
+        document.querySelectorAll('.oc-missing-label').forEach(el => el.remove());
+    }
+
+    // Async: find all missing-item slots, extract item name via tooltip, and label them
+    let _labellingInProgress = false;
+    async function labelMissingItems() {
+        if (_labellingInProgress) return;
+        _labellingInProgress = true;
+        try {
+            const root = document.querySelector('#faction-crimes, .faction-crimes-wrap, #faction-crimes-root');
+            if (!root) return;
+
+            const slots = root.querySelectorAll('[class*="wrapper___"][class*="success"]');
+            for (const slot of slots) {
+                if (!slot.querySelector('[class*="slotHeader___"]')) continue;
+                if (!hasMissingItem(slot)) continue;
+
+                const slotHeader = getSlotHeader(slot);
+                if (!slotHeader || slotHeader.querySelector('.oc-missing-label')) continue;
+
+                const itemName = await getItemName(slotHeader);
+                applyMissingLabel(slotHeader, itemName);
+                debugLog('Missing item labelled:', itemName);
+
+                // Small gap to avoid tooltip collisions between slots
+                await new Promise(r => setTimeout(r, 200));
+            }
+        } finally {
+            _labellingInProgress = false;
+        }
     }
 
     // Apply highlight styling to an element (uses outline-offset to draw outside overlay layers)
@@ -251,6 +349,7 @@
         highlightStalledOC2Rows();
         highlightSlotIssues();
         highlightUnavailableMembers();
+        labelMissingItems(); // async — runs in background, won't block other checks
     }
 
     // Initialize with retry logic for dynamic content
@@ -305,16 +404,17 @@
             });
         }
 
-        // Only observe body if specific containers not found (reduces mutation overhead)
+        // Fallback: observe faction page before body (reduces mutation overhead)
         if (!container && !oc2Container) {
-            observer.observe(document.body, {
+            const fallback = document.querySelector('#factions-page');
+            observer.observe(fallback || document.body, {
                 childList: true,
-                subtree: true
+                subtree: !!fallback
             });
         }
 
         // Periodic re-check as fallback (OC2 toggles display without triggering mutations)
-        const periodicCheckInterval = setInterval(runAllChecks, 10000);
+        const periodicCheckInterval = setInterval(runAllChecks, 25000);
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
