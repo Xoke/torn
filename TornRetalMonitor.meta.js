@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Ranked War Retal Monitor
 // @namespace    https://xoke.org/
-// @version      1.4
+// @version      1.5
 // @description  Monitors faction attacks to identify retaliation opportunities during ranked wars
 // @author       Xoke
 // @match        https://www.torn.com/*

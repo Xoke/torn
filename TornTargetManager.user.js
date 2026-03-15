@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Target Manager
 // @namespace    https://xoke.org/
-// @version      4.1
+// @version      4.2
 // @description  Manages a priority queue of elimination targets with live status updates, smart sorting, and bulk import from enemies/targets lists
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -30,8 +30,8 @@
 
     debugLog('Initializing...');
 
-    // Configuration
-    const API_DELAY = 3000; // 3 seconds between API calls
+    // Configuration. If using with Ranked War Target Finder or Retal Monitor, combined API usage counts toward Torn's 100 calls/min limit.
+    const API_DELAY = 3000; // 3 seconds between API batches
     const IDLE_THRESHOLD = 5 * 60; // 5 minutes in seconds
     const OFFLINE_THRESHOLD = 10 * 60; // 10 minutes in seconds
     const COOLDOWN_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -152,11 +152,11 @@
         GM_setValue(STORAGE_KEY + '_timestamp', Date.now().toString());
     }
 
-    // Listen for storage changes from other tabs
+    // Listen for storage changes from other tabs (GM_* storage has no cross-tab events, so we poll)
     function setupStorageListener() {
         let lastTimestamp = GM_getValue(STORAGE_KEY + '_timestamp', '0');
 
-        // Check for changes every 2 seconds
+        // Check for changes every 2 seconds (GM_* storage has no cross-tab events, so we poll)
         setInterval(() => {
             const currentTimestamp = GM_getValue(STORAGE_KEY + '_timestamp', '0');
             if (currentTimestamp !== lastTimestamp) {
@@ -992,21 +992,31 @@
 
         updateStatus('Refreshing target data...', 'warning');
 
+        const BATCH_SIZE = 2; // Stay under Torn API rate limits when other scripts (War Targets, Retal Monitor) may be calling API too
         try {
-            // Fetch targets one by one and update display immediately
-            for (let i = 0; i < targetList.length; i++) {
-                const target = targetList[i];
+            let abortRefresh = false;
+            for (let start = 0; start < targetList.length && !abortRefresh; start += BATCH_SIZE) {
+                const batch = targetList.slice(start, start + BATCH_SIZE);
+                const results = await Promise.all(batch.map(target =>
+                    safeFetch(`https://api.torn.com/user/${encodeURIComponent(target.id)}?selections=profile&key=${encodeURIComponent(apiKey)}`)
+                        .then(data => ({ target, data, error: null }))
+                        .catch(error => ({ target, data: null, error }))
+                ));
 
-                try {
-                    const data = await safeFetch(`https://api.torn.com/user/${encodeURIComponent(target.id)}?selections=profile&key=${encodeURIComponent(apiKey)}`);
-
-                    if (data.error) {
+                for (const { target, data, error } of results) {
+                    if (error) {
+                        debugError('Error fetching', target.id, error);
+                        continue;
+                    }
+                    if (data && data.error) {
                         if (data.error.code === 2 || data.error.code === 10) {
                             updateStatus(`❌ API Error: ${data.error.error}`, 'error');
+                            abortRefresh = true;
                             break;
                         }
                         continue;
                     }
+                    if (!data) continue;
 
                     target.name = data.name || target.name;
                     target.level = data.level || target.level;
@@ -1015,19 +1025,14 @@
                         description: data.status?.description || 'Unknown'
                     };
                     target.lastAction = data.last_action?.timestamp || 0;
+                }
 
-                    // Update display immediately after each target is fetched
-                    saveTargets();
-                    displayTargetsTable();
-                    updateStatus(`Refreshing... ${i + 1}/${targetList.length}`, 'warning');
+                saveTargets();
+                displayTargetsTable();
+                updateStatus(`Refreshing... ${Math.min(start + BATCH_SIZE, targetList.length)}/${targetList.length}`, 'warning');
 
-                    // Delay between requests
-                    if (i < targetList.length - 1) {
-                        await sleep(API_DELAY);
-                    }
-
-                } catch (error) {
-                    debugError('Error fetching', target.id, error);
+                if (start + BATCH_SIZE < targetList.length && !abortRefresh) {
+                    await sleep(API_DELAY);
                 }
             }
 
@@ -1120,7 +1125,8 @@
             const onCooldown = target.cooldownUntil > Date.now();
             const cooldownTime = onCooldown ? formatCooldown(target.cooldownUntil - Date.now()) : '';
 
-            rows += `<tr data-status="${statusState}" data-cooldown="${onCooldown ? '1' : '0'}" data-ff="${ff}" data-user-id="${target.id}">
+            const rowClass = onCooldown ? 'tm-row-cooldown' : '';
+            rows += `<tr class="${rowClass}" data-status="${statusState}" data-cooldown="${onCooldown ? '1' : '0'}" data-ff="${ff}" data-user-id="${target.id}">
                 <td class="delete-col">
                     <button class="remove-btn" data-action="remove" data-target-id="${escapeHtml(target.id)}" title="Remove target">✕</button>
                 </td>
@@ -1410,6 +1416,11 @@
             display: inline-block;
             font-weight: bold;
             white-space: nowrap;
+        }
+
+        .targets-table tr.tm-row-cooldown {
+            opacity: 0.75;
+            background: rgba(80, 80, 80, 0.2) !important;
         }
 
         .ff-score {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Target Manager
 // @namespace    https://xoke.org/
-// @version      4.1
+// @version      4.2
 // @description  Manages a priority queue of elimination targets with live status updates, smart sorting, and bulk import from enemies/targets lists
 // @author       Xoke
 // @match        https://www.torn.com/*

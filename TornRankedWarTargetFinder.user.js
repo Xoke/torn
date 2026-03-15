@@ -16,6 +16,7 @@
 
 (function() {
     'use strict';
+    // Heavy targets UI is built only when user clicks "Load War Targets" on a faction page.
 
     var DEBUG = false;
 
@@ -48,7 +49,8 @@
     }
 
     // Configuration Constants
-    var API_DELAY = 5000; // 5 seconds - very conservative (Torn allows 100 calls/min)
+    // Targets UI is built only when user clicks "Load War Targets". If using with Target Manager or Retal Monitor, combined API usage counts toward Torn's 100 calls/min limit.
+    var API_DELAY = 5000; // 5 seconds - conservative (Torn allows 100 calls/min)
     var FETCH_TIMEOUT = 15000; // 15 second timeout for API requests
     var FILTER_DEBOUNCE_MS = 250;
     var BUTTON_DEBOUNCE_MS = 500;

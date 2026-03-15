@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Ranked War Retal Monitor
 // @namespace    https://xoke.org/
-// @version      1.4
+// @version      1.5
 // @description  Monitors faction attacks to identify retaliation opportunities during ranked wars
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -49,7 +49,7 @@
 
     debugLog('Script initialized');
 
-    // Configuration
+    // Configuration. If using with Ranked War Target Finder or Target Manager, combined API usage counts toward Torn's 100 calls/min limit.
     var API_DELAY = 10000; // Check every 10 seconds
     var RETAL_WINDOW = 300; // 5 minutes in seconds
     var apiKey = GM_getValue('tornRetalApiKey', '');
@@ -685,9 +685,10 @@
         // Update display differentially
         updateRetalList();
 
-        // Only play sound for new retals
+        // Only play sound and flash for new retals
         if (newRetals.length > 0) {
             playNotificationSound();
+            flashRetalPanel();
         }
 
         // Update badge count
@@ -834,6 +835,16 @@
         } catch (e) {
             // Audio not supported or blocked
         }
+    }
+
+    // Visual fallback when audio is blocked: brief flash on the panel
+    function flashRetalPanel() {
+        var panel = document.getElementById('retal-monitor-panel');
+        if (!panel) return;
+        panel.style.boxShadow = '0 0 20px 5px rgba(255, 68, 68, 0.8)';
+        setTimeout(function() {
+            panel.style.boxShadow = '';
+        }, 400);
     }
 
     // Initialize

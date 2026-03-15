@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      1.8
+// @version      1.9
 // @run-at       document-end
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
@@ -132,11 +132,54 @@
         return titleEl ? titleEl.textContent.trim() : 'Unknown Role';
     }
 
-    // Check if the current player is already committed to an OC.
-    // In OC2, the current player's own slot carries 'active___' alongside 'wrapper___'.
-    // Other members' filled slots use plain 'wrapper___' (no 'active___'), so this is unambiguous.
-    function isPlayerInOC() {
-        return !!document.querySelector('[data-oc-id] [class*="wrapper___"][class*="active___"]');
+    // Get the current player's name from the page header (cached for session)
+    let cachedPlayerName = null;
+    function getCurrentPlayerName() {
+        if (cachedPlayerName !== null) return cachedPlayerName;
+        // Try user-information sidebar: <span class="bold">Name:</span> followed by text
+        const userInfo = document.querySelector('.user-information');
+        if (userInfo) {
+            const spans = userInfo.querySelectorAll('span.bold');
+            for (const span of spans) {
+                if (span.textContent.trim() === 'Name:') {
+                    const li = span.parentElement;
+                    if (li) {
+                        const name = li.textContent.replace('Name:', '').trim();
+                        if (name) {
+                            cachedPlayerName = name;
+                            return name;
+                        }
+                    }
+                }
+            }
+        }
+        // Fallback: try menu-name style header
+        const nameLabel = document.querySelector('[class*="menu-name___"]');
+        if (nameLabel && nameLabel.parentElement) {
+            const honorText = nameLabel.parentElement.querySelector('.honor-text');
+            if (honorText) {
+                cachedPlayerName = honorText.textContent.trim();
+                return cachedPlayerName;
+            }
+        }
+        return null;
+    }
+
+    // Check if the current player is already in any OC
+    function isPlayerInOC(playerName) {
+        const crimeCards = document.querySelectorAll('[data-oc-id]');
+        for (const card of crimeCards) {
+            const slots = card.querySelectorAll('[class*="wrapper___"][class*="success"]');
+            for (const slot of slots) {
+                if (!slot.querySelector('[class*="slotHeader___"]')) continue;
+                if (isEmptySlot(slot)) continue;
+                const honorTexts = slot.querySelectorAll('.honor-text');
+                for (const ht of honorTexts) {
+                    if (ht.textContent.trim() === playerName) return true;
+                }
+            }
+        }
+        return false;
     }
 
     // Check if slot meets threshold for its level
@@ -326,8 +369,9 @@
         try {
         clearRecommendations();
 
-        if (isPlayerInOC()) {
-            debugLog('Player is already in an OC, skipping recommendations');
+        const playerName = getCurrentPlayerName();
+        if (playerName && isPlayerInOC(playerName)) {
+            debugLog(playerName, 'is already in an OC, skipping recommendations');
             return;
         }
 
@@ -398,11 +442,12 @@
             });
         }
 
-        // Only observe body if specific container not found (reduces mutation overhead)
+        // Fallback: observe faction page container before body (reduces mutation overhead)
         if (!container) {
-            observer.observe(document.body, {
+            const fallback = document.querySelector('#factions-page');
+            observer.observe(fallback || document.body, {
                 childList: true,
-                subtree: true
+                subtree: !!fallback
             });
         }
 

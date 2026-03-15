@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Faction CSV Exporter
 // @namespace    https://xoke.org/
-// @version      2.9
+// @version      3.0
 // @description  CSV exporter with battle stats sorting (highest to lowest)
 // @author       Xoke
 // @match        https://www.torn.com/factions.php?*
@@ -16,7 +16,7 @@
     'use strict';
 
     const DEBUG = false;
-    const VERSION = '2.9';
+    const VERSION = '3.0';
     const MULTIPLIERS = { k: 1000, m: 1000000, b: 1000000000 };
 
     function debugLog(...args) {
@@ -43,12 +43,13 @@
         }, 3000);
     }
 
-    // Sanitize CSV fields to prevent formula injection
+    // Sanitize CSV fields: escape quotes, newlines/tabs, and prevent formula injection
     function sanitizeCSVField(str) {
-        if (!str) return '';
+        if (str == null || str === undefined) return '';
         str = String(str);
+        str = str.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\r/g, ' ').replace(/\t/g, ' ');
         str = str.replace(/"/g, '""');
-        if (/^[=+\-@]/.test(str)) {
+        if (/^[=+\-@\t]/.test(str)) {
             str = "'" + str;
         }
         return str;
