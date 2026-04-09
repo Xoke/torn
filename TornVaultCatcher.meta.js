@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Vault Catcher
 // @namespace    https://xoke.org/
-// @version      1.6
+// @version      1.8
 // @description  Warns when giving a faction member more money than their vault balance
 // @author       Xoke (based on VaultCatcher by Lazerpent [2112641])
 // @match        https://www.torn.com/factions.php*

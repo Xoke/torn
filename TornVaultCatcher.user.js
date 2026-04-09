@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Vault Catcher
 // @namespace    https://xoke.org/
-// @version      1.6
+// @version      1.8
 // @description  Warns when giving a faction member more money than their vault balance
 // @author       Xoke (based on VaultCatcher by Lazerpent [2112641])
 // @match        https://www.torn.com/factions.php*
@@ -14,6 +14,21 @@
 
 (function () {
     'use strict';
+
+    function showNotification(message, type) {
+        const notification = document.createElement('div');
+        notification.style.cssText =
+            'position:fixed;top:20px;right:20px;z-index:99999;' +
+            'padding:10px 16px;border-radius:5px;font-size:12px;font-weight:bold;' +
+            'background:' + (type === 'error' ? '#c0392b' : '#2980b9') + ';' +
+            'color:white;box-shadow:0 2px 8px rgba(0,0,0,0.4);transition:opacity 0.3s;';
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        setTimeout(function() {
+            notification.style.opacity = '0';
+            setTimeout(function() { notification.remove(); }, 300);
+        }, 3000);
+    }
 
     let interceptActive = false;
 
@@ -132,8 +147,8 @@
         const allVisible = container.querySelectorAll('input.input-money:not([type="hidden"])');
         const allHidden = container.querySelectorAll('input[type="hidden"].input-money');
 
-        var visibleInput = null;
-        var hiddenInput = null;
+        let visibleInput = null;
+        let hiddenInput = null;
         for (const input of allVisible) {
             if (!input.closest('li')) { visibleInput = input; break; }
         }
@@ -141,7 +156,7 @@
             if (!input.closest('li')) { hiddenInput = input; break; }
         }
 
-        var formatted = '$' + value.toLocaleString();
+        const formatted = '$' + value.toLocaleString();
 
         // Use React's native setter to trigger change detection
         var nativeSetter = Object.getOwnPropertyDescriptor(
@@ -182,14 +197,22 @@
         // mid-render), bail out. The observer will retry once the form stabilises.
         if (!moneyGroup) return;
 
+        // Make the group a positioning context for the inset button
+        moneyGroup.style.position = 'relative';
+
+        // Add right padding to the visible input so text doesn't slide under the button
+        var visibleInput = moneyGroup.querySelector('input.input-money:not([type="hidden"])');
+        if (visibleInput) visibleInput.style.paddingRight = '36px';
+
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'vault-catcher-fill-btn';
-        btn.textContent = 'Fill balance';
+        btn.textContent = 'Bal';
         btn.style.cssText =
-            'margin-left: 8px; padding: 2px 10px; font-size: 11px; cursor: pointer; ' +
+            'position: absolute; right: 4px; top: 50%; transform: translateY(-50%); ' +
+            'padding: 2px 6px; font-size: 11px; cursor: pointer; ' +
             'background: #2980b9; color: white; border: none; border-radius: 3px; ' +
-            'vertical-align: middle;';
+            'z-index: 1;';
 
         btn.addEventListener('mouseenter', function () { btn.style.background = '#3498db'; });
         btn.addEventListener('mouseleave', function () { btn.style.background = '#2980b9'; });
@@ -198,17 +221,17 @@
             e.preventDefault();
             var balance = getSelectedBalance();
             if (balance === null || isNaN(balance)) {
-                alert('Could not determine the selected member\'s vault balance.');
+                showNotification('Could not determine the selected member\'s vault balance.', 'error');
                 return;
             }
             if (balance <= 0) {
-                alert('This member has no vault balance.');
+                showNotification('This member has no vault balance.', 'error');
                 return;
             }
             setMoneyInput(balance);
         });
 
-        moneyGroup.parentNode.insertBefore(btn, moneyGroup.nextSibling);
+        moneyGroup.appendChild(btn);
     }
 
     function interceptSubmit() {
