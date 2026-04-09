@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Vault Catcher
 // @namespace    https://xoke.org/
-// @version      1.8
+// @version      1.9
 // @description  Warns when giving a faction member more money than their vault balance
 // @author       Xoke (based on VaultCatcher by Lazerpent [2112641])
 // @match        https://www.torn.com/factions.php*
@@ -209,9 +209,9 @@
         btn.className = 'vault-catcher-fill-btn';
         btn.textContent = 'Bal';
         btn.style.cssText =
-            'position: absolute; right: 4px; top: 50%; transform: translateY(-50%); ' +
-            'padding: 2px 6px; font-size: 11px; cursor: pointer; ' +
-            'background: #2980b9; color: white; border: none; border-radius: 3px; ' +
+            'position: absolute; right: 0; top: 0; bottom: 0; ' +
+            'padding: 0 8px; font-size: 11px; cursor: pointer; ' +
+            'background: #2980b9; color: white; border: none; border-radius: 0 3px 3px 0; ' +
             'z-index: 1;';
 
         btn.addEventListener('mouseenter', function () { btn.style.background = '#3498db'; });
