@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      2.9
+// @version      3.1
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
@@ -17,8 +17,8 @@
 
     const DEBUG = false;
 
-    function debugLog() {
-        if (DEBUG) console.log.apply(console, ['[OC Highlighter]'].concat(Array.prototype.slice.call(arguments)));
+    function debugLog(...args) {
+        if (DEBUG) console.log('[OC Highlighter]', ...args);
     }
 
     const SUCCESS_THRESHOLD = 70;
@@ -26,38 +26,36 @@
     const MAX_LEVEL = 6;
 
     // Low success rate styling (red)
-    const HIGHLIGHT_BORDER = '4px solid #ff0000';
     const HIGHLIGHT_OUTLINE = '2px solid #ffff00';
     const HIGHLIGHT_BOX_SHADOW = '0 0 10px 3px rgba(255, 0, 0, 0.8)';
 
     // Stalled/paused OC styling (orange)
-    const STALLED_BORDER = '4px solid #ff8800';
     const STALLED_OUTLINE = '2px solid #ffcc00';
     const STALLED_BOX_SHADOW = '0 0 10px 3px rgba(255, 136, 0, 0.8)';
 
     // Missing item styling (purple)
-    const MISSING_ITEM_BORDER = '4px solid #aa00ff';
     const MISSING_ITEM_OUTLINE = '2px solid #dd66ff';
     const MISSING_ITEM_BOX_SHADOW = '0 0 10px 3px rgba(170, 0, 255, 0.8)';
 
     // OC2 style application (reapplied every cycle via setProperty)
 
-    // Find the crime level for a slot element by traversing up to find the crime card
-    function getCrimeLevel(slotElement) {
-        // Look for parent crime card with data-oc-id attribute
-        let parent = slotElement.parentElement;
+    // Traverse up from el to find the OC crime card (data-oc-id ancestor)
+    function getOCCard(el) {
+        let parent = el.parentElement;
         while (parent && !parent.hasAttribute('data-oc-id')) {
             parent = parent.parentElement;
             if (!parent || parent === document.body) return null;
         }
+        return parent;
+    }
 
-        if (!parent) return null;
-
-        // Find the level value within the crime card
+    // Find the crime level for a slot element by traversing up to find the crime card
+    function getCrimeLevel(slotElement) {
+        const card = getOCCard(slotElement);
+        if (!card) return null;
         // Class pattern: levelValue___XXXXX
-        const levelEl = parent.querySelector('[class*="levelValue___"]');
+        const levelEl = card.querySelector('[class*="levelValue___"]');
         if (!levelEl) return null;
-
         const level = parseInt(levelEl.textContent.trim(), 10);
         return isNaN(level) ? null : level;
     }
@@ -87,16 +85,6 @@
         return isNaN(rate) ? null : rate;
     }
 
-    // Get the crime card element from a child element
-    function getCrimeCard(element) {
-        let parent = element.parentElement;
-        while (parent && !parent.hasAttribute('data-oc-id')) {
-            parent = parent.parentElement;
-            if (!parent || parent === document.body) return null;
-        }
-        return parent;
-    }
-
     // Check if a crime card is paused/stalled
     function isCrimePaused(crimeCard) {
         if (!crimeCard) return false;
@@ -105,9 +93,9 @@
         return false;
     }
 
-    // Check if a slot has a missing item (new Torn UI uses inactive___ class on the slot icon)
+    // Check if a slot has a missing item (indicated by the red no-entry SVG icon)
     function hasMissingItem(slotElement) {
-        return !!slotElement.querySelector('[class*="inactive___"]');
+        return !!slotElement.querySelector('path[fill="#ff794c"]');
     }
 
     // Get the slotHeader button within a slot wrapper
@@ -209,7 +197,7 @@
     }
 
     // Apply highlight styling to an element (uses outline-offset to draw outside overlay layers)
-    function applyHighlight(element, border, outline, boxShadow, tag) {
+    function applyHighlight(element, outline, boxShadow, tag) {
         element.style.setProperty('outline', outline, 'important');
         element.style.setProperty('outline-offset', '2px', 'important');
         element.style.setProperty('box-shadow', boxShadow, 'important');
@@ -239,7 +227,7 @@
             const currentTag = card.dataset.ocHighlighted;
 
             if (paused && currentTag !== 'stalled') {
-                applyHighlight(card, STALLED_BORDER, STALLED_OUTLINE, STALLED_BOX_SHADOW, 'stalled');
+                applyHighlight(card, STALLED_OUTLINE, STALLED_BOX_SHADOW, 'stalled');
                 debugLog('Stalled OC:', card.getAttribute('data-oc-id'));
             } else if (!paused && currentTag === 'stalled') {
                 clearHighlight(card);
@@ -283,7 +271,7 @@
             // Check for missing items (any level, any slot with a player)
             if (hasPlayer(slot) && hasMissingItem(slot)) {
                 if (currentTag !== 'missingItem') {
-                    applyHighlight(slot, MISSING_ITEM_BORDER, MISSING_ITEM_OUTLINE, MISSING_ITEM_BOX_SHADOW, 'missingItem');
+                    applyHighlight(slot, MISSING_ITEM_OUTLINE, MISSING_ITEM_BOX_SHADOW, 'missingItem');
                     debugLog('Missing item: Level', level);
                 }
                 return;
@@ -308,7 +296,7 @@
             // Highlight if below threshold
             if (successRate < SUCCESS_THRESHOLD) {
                 if (currentTag !== 'lowSuccess') {
-                    applyHighlight(slot, HIGHLIGHT_BORDER, HIGHLIGHT_OUTLINE, HIGHLIGHT_BOX_SHADOW, 'lowSuccess');
+                    applyHighlight(slot, HIGHLIGHT_OUTLINE, HIGHLIGHT_BOX_SHADOW, 'lowSuccess');
                     debugLog('Low success slot: Level', level, 'Success', successRate + '%');
                 }
             } else {
@@ -316,6 +304,8 @@
             }
         });
     }
+
+    const UNAVAILABLE_STATUSES = new Set(['hospital', 'traveling', 'returning', 'jail', 'federal', 'abroad', 'flying']);
 
     // Highlight unavailable members in the OC2 table view
     function highlightUnavailableMembers() {
@@ -328,13 +318,7 @@
             if (!statusCell) return;
 
             const statusText = statusCell.textContent.trim().toLowerCase();
-            const isUnavailable = statusText.includes('hospital') ||
-                statusText.includes('traveling') ||
-                statusText.includes('returning') ||
-                statusText.includes('jail') ||
-                statusText.includes('federal') ||
-                statusText.includes('abroad') ||
-                statusText.includes('flying');
+            const isUnavailable = [...UNAVAILABLE_STATUSES].some(s => statusText.includes(s));
 
             if (isUnavailable) {
                 memberRow.style.setProperty('background-color', 'rgba(255, 50, 50, 0.25)', 'important');
