@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      3.2
+// @version      3.3
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
@@ -94,11 +94,11 @@
     }
 
     // Check if a slot has a missing item (indicated by the red no-entry SVG icon)
-    // Excludes red paths inside player badge containers (e.g. flying status airplane icon)
+    // Excludes red paths inside slotIcon (used for player status icons like flying)
     function hasMissingItem(slotElement) {
         const redPaths = slotElement.querySelectorAll('path[fill="#ff794c"]');
         for (const path of redPaths) {
-            if (!path.closest('[class*="badgeContainer___"]')) return true;
+            if (!path.closest('[class*="slotIcon___"]')) return true;
         }
         return false;
     }
