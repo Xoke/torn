@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      3.4
+// @version      3.5
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
@@ -93,10 +93,10 @@
         return false;
     }
 
-    // Check if a slot has a missing item (red no-entry SVG inside inactive___ wrapper)
-    // Flying status uses the same fill color but sits directly in slotIcon___, not inactive___
+    // Check if a slot has a missing item (red no-entry SVG inside a div wrapper within slotIcon___)
+    // Flying status uses the same fill color but its SVG sits directly in slotIcon___ with no wrapper div
     function hasMissingItem(slotElement) {
-        return !!slotElement.querySelector('[class*="inactive___"] path[fill="#ff794c"]');
+        return !!slotElement.querySelector('[class*="slotIcon___"] div path[fill="#ff794c"]');
     }
 
     // Get the slotHeader button within a slot wrapper
