@@ -260,6 +260,74 @@
         document.head.appendChild(style);
     })();
 
+    // Create the modal once and append to document.body
+    function injectSettingsUI() {
+        if (document.getElementById('oc-threshold-modal')) return;
+
+        let gridHTML = '';
+        for (let lvl = MIN_LEVEL; lvl <= MAX_LEVEL; lvl++) {
+            gridHTML += `<div class="oc-threshold-row">
+                <label>Level ${lvl}</label>
+                <input id="oc-lvl-${lvl}" type="number" min="0" max="100" value="${thresholds[lvl]}">
+                <span>%</span>
+            </div>`;
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'oc-threshold-modal';
+        modal.innerHTML = `<div id="oc-threshold-panel">
+            <h3>&#9881; OC Success Thresholds</h3>
+            <div class="oc-threshold-grid">${gridHTML}</div>
+            <div id="oc-threshold-footer">
+                <button id="oc-threshold-save">Save</button>
+                <button id="oc-threshold-cancel">Cancel</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+
+        document.getElementById('oc-threshold-save').addEventListener('click', () => {
+            for (let lvl = MIN_LEVEL; lvl <= MAX_LEVEL; lvl++) {
+                const input = document.getElementById(`oc-lvl-${lvl}`);
+                const val = parseInt(input.value, 10);
+                if (!isNaN(val) && val >= 0 && val <= 100) thresholds[lvl] = val;
+            }
+            saveThresholds();
+            modal.classList.remove('open');
+            runAllChecks();
+        });
+
+        document.getElementById('oc-threshold-cancel').addEventListener('click', () => {
+            modal.classList.remove('open');
+        });
+
+        modal.addEventListener('mousedown', e => {
+            if (e.target === modal) modal.classList.remove('open');
+        });
+    }
+
+    // Inject the settings button above the first crime card (re-checked each runAllChecks)
+    function injectSettingsButton() {
+        if (document.getElementById('oc-threshold-btn-wrap')) return;
+        const root = document.querySelector('#faction-crimes, .faction-crimes-wrap, #faction-crimes-root');
+        if (!root) return;
+        const firstCard = root.querySelector('[data-oc-id]');
+        if (!firstCard) return;
+
+        const wrap = document.createElement('div');
+        wrap.id = 'oc-threshold-btn-wrap';
+        const btn = document.createElement('button');
+        btn.textContent = '\u2699 OC Thresholds';
+        btn.addEventListener('click', () => {
+            for (let lvl = MIN_LEVEL; lvl <= MAX_LEVEL; lvl++) {
+                const input = document.getElementById(`oc-lvl-${lvl}`);
+                if (input) input.value = thresholds[lvl];
+            }
+            document.getElementById('oc-threshold-modal').classList.add('open');
+        });
+        wrap.appendChild(btn);
+        firstCard.parentElement.insertBefore(wrap, firstCard);
+    }
+
     // Briefly trigger a slot's tooltip to read "Used item: X", then dismiss it.
     // Returns a Promise<string> with the item name, or '?' if not found.
     function getItemName(slotHeader) {
@@ -457,6 +525,7 @@
 
     // Run all checks
     function runAllChecks() {
+        injectSettingsButton();
         highlightStalledOCs();
         highlightStalledOC2Rows();
         highlightSlotIssues();
@@ -483,8 +552,7 @@
         }
 
         debugLog('Initialized');
-
-        // Initial highlight
+        injectSettingsUI();
         runAllChecks();
 
         // Set up MutationObserver with debouncing
