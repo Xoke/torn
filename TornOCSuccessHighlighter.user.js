@@ -152,6 +152,114 @@
         document.head.appendChild(style);
     })();
 
+    // Inject threshold settings UI styles once
+    (function injectThresholdStyles() {
+        const STYLE_ID = 'oc-threshold-styles';
+        if (document.getElementById(STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = STYLE_ID;
+        style.textContent = `
+            #oc-threshold-btn-wrap {
+                display: flex;
+                justify-content: flex-end;
+                margin-bottom: 6px;
+            }
+            #oc-threshold-btn-wrap button {
+                background: #2a2a3e;
+                border: 1px solid #445;
+                border-radius: 4px;
+                color: #aac;
+                font-size: 11px;
+                padding: 4px 10px;
+                cursor: pointer;
+                font-family: sans-serif;
+            }
+            #oc-threshold-btn-wrap button:hover {
+                background: #333355;
+            }
+            #oc-threshold-modal {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.6);
+                z-index: 99999;
+                align-items: center;
+                justify-content: center;
+            }
+            #oc-threshold-modal.open {
+                display: flex;
+            }
+            #oc-threshold-panel {
+                background: #222;
+                border: 1px solid #445;
+                border-radius: 8px;
+                padding: 14px 16px;
+                box-shadow: 0 6px 24px rgba(0,0,0,0.7);
+                font-family: sans-serif;
+            }
+            #oc-threshold-panel h3 {
+                color: #ccc;
+                font-size: 12px;
+                margin: 0 0 10px 0;
+            }
+            .oc-threshold-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 6px 14px;
+                margin-bottom: 12px;
+            }
+            .oc-threshold-row {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                font-size: 11px;
+                color: #aaa;
+            }
+            .oc-threshold-row label {
+                min-width: 44px;
+            }
+            .oc-threshold-row input {
+                width: 32px;
+                background: #1a1a2e;
+                color: #eee;
+                border: 1px solid #445;
+                border-radius: 3px;
+                text-align: center;
+                font-size: 11px;
+                padding: 2px 0;
+            }
+            .oc-threshold-row input::-webkit-inner-spin-button,
+            .oc-threshold-row input::-webkit-outer-spin-button { display: none; }
+            .oc-threshold-row span { color: #555; }
+            #oc-threshold-footer {
+                display: flex;
+                gap: 6px;
+                justify-content: flex-end;
+            }
+            #oc-threshold-save {
+                background: #2d2d5e;
+                color: #aac;
+                border: 1px solid #446;
+                border-radius: 3px;
+                padding: 3px 12px;
+                font-size: 11px;
+                cursor: pointer;
+                font-family: sans-serif;
+            }
+            #oc-threshold-cancel {
+                background: #2a2a2a;
+                color: #888;
+                border: 1px solid #444;
+                border-radius: 3px;
+                padding: 3px 12px;
+                font-size: 11px;
+                cursor: pointer;
+                font-family: sans-serif;
+            }
+        `;
+        document.head.appendChild(style);
+    })();
+
     // Briefly trigger a slot's tooltip to read "Used item: X", then dismiss it.
     // Returns a Promise<string> with the item name, or '?' if not found.
     function getItemName(slotHeader) {
