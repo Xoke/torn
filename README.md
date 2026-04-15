@@ -61,6 +61,9 @@ Scripts by other authors that I've found useful.
 - [Torn Mission Reward Information](https://greasyfork.org/en/scripts/395668-torn-mission-reward-information) - Displays mission reward value per credit and compares mod offers.
 - [cryosis7's Torn Userscripts](https://github.com/cryosis7/torn_userscripts) - Collection of utility scripts for filtering, racing, and various game mechanics.
 
+### Extensions
+- [Torn Tools](https://github.com/Mephiles/torntools_extension) - Comprehensive browser extension with a wide range of quality-of-life features across the game.
+
 ## Installation
 
 1. Install a userscript manager like [Tampermonkey](https://www.tampermonkey.net/) or [Greasemonkey](https://www.greasespot.net/)
