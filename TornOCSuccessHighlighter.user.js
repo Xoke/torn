@@ -22,9 +22,27 @@
         if (DEBUG) console.log('[OC Highlighter]', ...args);
     }
 
-    const SUCCESS_THRESHOLD = 70;
-    const MIN_LEVEL = 2;
-    const MAX_LEVEL = 6;
+    const MIN_LEVEL = 1;
+    const MAX_LEVEL = 10;
+    const DEFAULT_THRESHOLDS = { 1: 0, 2: 70, 3: 70, 4: 70, 5: 70, 6: 70, 7: 60, 8: 60, 9: 60, 10: 60 };
+    let thresholds = Object.assign({}, DEFAULT_THRESHOLDS);
+
+    function loadThresholds() {
+        const saved = GM_getValue('oc_thresholds', null);
+        if (!saved) return;
+        try {
+            const parsed = JSON.parse(saved);
+            for (let lvl = MIN_LEVEL; lvl <= MAX_LEVEL; lvl++) {
+                if (typeof parsed[lvl] === 'number') thresholds[lvl] = parsed[lvl];
+            }
+        } catch (e) {}
+    }
+
+    function saveThresholds() {
+        GM_setValue('oc_thresholds', JSON.stringify(thresholds));
+    }
+
+    loadThresholds();
 
     // Low success rate styling (red)
     const HIGHLIGHT_OUTLINE = '2px solid #ffff00';
@@ -279,7 +297,7 @@
                 return;
             }
 
-            // Low success rate check only for level 2-6
+            // Low success rate check only for levels within range
             if (level < MIN_LEVEL || level > MAX_LEVEL) {
                 if (currentTag === 'lowSuccess') clearHighlight(slot);
                 return;
@@ -295,8 +313,8 @@
             const successRate = getSuccessRate(slot);
             if (successRate === null) return;
 
-            // Highlight if below threshold
-            if (successRate < SUCCESS_THRESHOLD) {
+            // Highlight if below per-level threshold (threshold of 0 means never highlight)
+            if (thresholds[level] > 0 && successRate < thresholds[level]) {
                 if (currentTag !== 'lowSuccess') {
                     applyHighlight(slot, HIGHLIGHT_OUTLINE, HIGHLIGHT_BOX_SHADOW, 'lowSuccess');
                     debugLog('Low success slot: Level', level, 'Success', successRate + '%');
