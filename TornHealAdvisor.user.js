@@ -1,23 +1,34 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      2.2
+// @version      2.6
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
+// @match        https://www.torn.com/
+// @match        https://www.torn.com/index.php*
 // @match        https://www.torn.com/item.php*
 // @match        https://www.torn.com/factions.php*
 // @homepageURL  https://github.com/Xoke/torn
 // @updateURL    https://raw.githubusercontent.com/Xoke/torn/main/TornHealAdvisor.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Xoke/torn/main/TornHealAdvisor.user.js
 // @run-at       document-end
-// @grant        none
+// @grant        GM_setValue
+// @grant        GM_getValue
 // ==/UserScript==
 
 (function () {
     'use strict';
 
+    // ─── Config ───────────────────────────────────────────────────────────
+    // Medical bonuses are scraped automatically from your personal perks on
+    // the main Torn page (torn.com/) and cached for 24 h.
+    // These manual values are only used if the cache is empty (i.e. you
+    // haven't visited the main page since installing the script).
+    const EDUCATION_BONUS_PCT = 0;   // 0–20
+    const FACTION_BONUS_PCT   = 0;   // 0–30
+
     // ─── Item config ──────────────────────────────────────────────────────
-    // hospReduction: minutes removed from hospital timer on use
+    // hospReduction: base minutes removed from hospital timer on use
     // life:          % of max life restored
     // cooldown:      medical cooldown imposed (minutes)
     //
@@ -57,7 +68,35 @@
             excludePattern: /irradiated/i,
         },
     ];
-    ITEMS.sort((a, b) => b.hospReduction - a.hospReduction);
+
+    // ─── Bonus detection ──────────────────────────────────────────────────
+    // On torn.com/ the script scrapes #personal-perks for spans like
+    // "+ 20% medical item effectiveness" and caches the total for 24 h.
+    // On item.php / factions.php the cached value is read and applied.
+    const BONUS_CACHE_KEY = 'tornHealMedicalBonus';
+    const BONUS_TS_KEY    = 'tornHealMedicalBonusTs';
+    const BONUS_CACHE_MS  = 24 * 60 * 60 * 1000;
+
+    function scrapeAndCacheBonus() {
+        const container = document.querySelector('#personal-perks');
+        if (!container) return false;
+        let total = 0;
+        for (const span of container.querySelectorAll('span')) {
+            if (!/medical item effectiveness/i.test(span.textContent)) continue;
+            const m = span.textContent.match(/(\d+)%/);
+            if (m) total += parseInt(m[1], 10);
+        }
+        GM_setValue(BONUS_CACHE_KEY, Math.min(total, 50));
+        GM_setValue(BONUS_TS_KEY, Date.now());
+        return true;
+    }
+
+    function getCachedBonus() {
+        const cached = GM_getValue(BONUS_CACHE_KEY, null);
+        const ts     = GM_getValue(BONUS_TS_KEY, 0);
+        if (cached !== null && (Date.now() - ts) < BONUS_CACHE_MS) return cached;
+        return EDUCATION_BONUS_PCT + FACTION_BONUS_PCT;
+    }
 
     // ─── Hospital time detection ──────────────────────────────────────────
     function detectHospitalMinutes(callback) {
@@ -107,21 +146,26 @@
         const h   = str.match(/(\d+)\s*h/i);
         const min = str.match(/(\d+)\s*m(?!o)/i);
         const sec = str.match(/(\d+)\s*s/i);
-        if (h)   m += parseInt(h[1]) * 60;
-        if (min) m += parseInt(min[1]);
-        if (sec) m += parseInt(sec[1]) / 60;
+        if (h)   m += parseInt(h[1], 10) * 60;
+        if (min) m += parseInt(min[1], 10);
+        if (sec) m += parseInt(sec[1], 10) / 60;
         return m;
     }
 
     // ─── Recommendation ───────────────────────────────────────────────────
-    function recommend(hospMinutes) {
-        const best = ITEMS.find(item => hospMinutes > item.cooldown) || null;
+    function recommend(hospMinutes, bonusPct) {
+        const mult  = 1 + bonusPct / 100;
+        const items = ITEMS
+            .map(item => Object.assign({}, item, { hospReduction: Math.round(item.hospReduction * mult) }))
+            .sort((a, b) => b.hospReduction - a.hospReduction);
+
+        const best = items.find(item => hospMinutes > item.cooldown) || null;
         if (!best) return { item: null, hospAfterCooldown: 0, next: null };
 
         const hospAfterReduction = Math.max(0, hospMinutes - best.hospReduction);
         const hospAfterCooldown  = Math.max(0, hospAfterReduction - best.cooldown);
         const next = hospAfterCooldown > 0
-            ? (ITEMS.find(item => hospAfterCooldown > item.cooldown) || null)
+            ? (items.find(item => hospAfterCooldown > item.cooldown) || null)
             : null;
 
         return { item: best, hospAfterCooldown, next };
@@ -291,6 +335,7 @@
         cleanup();
         if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
 
+        const bonusPct = getCachedBonus();
         detectHospitalMinutes(function (hospMin) {
             if (!hospMin || hospMin <= 0) {
                 if (!retryObserver) {
@@ -315,7 +360,7 @@
 
             if (retryObserver) { retryObserver.disconnect(); retryObserver = null; }
 
-            const rec = recommend(hospMin);
+            const rec = recommend(hospMin, bonusPct);
             showBanner(hospMin, rec);
             setTimeout(() => {
                 highlightItems(rec);
@@ -324,10 +369,20 @@
         });
     }
 
-    setTimeout(run, 2000);
-    window.addEventListener('hashchange', () => {
-        if (retryObserver) { retryObserver.disconnect(); retryObserver = null; }
-        if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
-        setTimeout(run, 1000);
-    });
+    const path = location.pathname;
+    if (path === '/' || path.startsWith('/index.php')) {
+        // On the main page: scrape personal perks and cache the bonus.
+        // #personal-perks loads dynamically, so retry until it appears.
+        let scrapeRetries = 0;
+        const scrapeInterval = setInterval(() => {
+            if (scrapeAndCacheBonus() || ++scrapeRetries > 40) clearInterval(scrapeInterval);
+        }, 500);
+    } else {
+        setTimeout(run, 2000);
+        window.addEventListener('hashchange', () => {
+            if (retryObserver) { retryObserver.disconnect(); retryObserver = null; }
+            if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
+            setTimeout(run, 1000);
+        });
+    }
 })();
