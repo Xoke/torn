@@ -1,1 +1,84 @@
-{}
+{
+  "Market Forces": {
+    "Enforcer": 50,
+    "Negotiator": 70,
+    "Lookout": 70,
+    "Arsonist": 50,
+    "Muscle": 50
+  },
+  "Smoke and Wing Mirrors": {
+    "Car Thief": 70,
+    "Impersonator": 70,
+    "Hustler 1": 50,
+    "Hustler 2": 50
+  },
+  "Gaslight the Way": {
+    "Imitator 1": 50,
+    "Imitator 2": 70,
+    "Imitator 3": 70,
+    "Looter 1": 50,
+    "Looter 2": 50,
+    "Looter 3": 50
+  },
+  "Stage Fright": {
+    "Enforcer": 60,
+    "Muscle 1": 70,
+    "Muscle 2": 60,
+    "Muscle 4": 60,
+    "Lookout": 60,
+    "Sniper": 70
+  },
+  "Snow Blind": {
+    "Hustler": 70,
+    "Impersonator": 65,
+    "Muscle 1": 55,
+    "Muscle 2": 55
+  },
+  "Plucking the Lotus Petal": {
+    "Robber 1": 60,
+    "Hustler": 65,
+    "Robber 2": 65,
+    "Muscle": 70
+  },
+  "Leave No Trace": {
+    "Techie": 65,
+    "Negotiator": 65,
+    "Imitator": 70
+  },
+  "No Reserve": {
+    "Car Thief": 60,
+    "Techie": 70,
+    "Engineer": 60
+  },
+  "Counter Offer": {
+    "Robber": 65,
+    "Looter": 50,
+    "Hacker": 60,
+    "Picklock": 60,
+    "Engineer": 65
+  },
+  "Guardian Angels": {
+    "Enforcer": 65,
+    "Hustler": 65,
+    "Engineer": 65
+  },
+  "Honey Trap": {
+    "Enforcer": 60,
+    "Muscle 1": 65,
+    "Muscle 2": 70
+  },
+  "Bidding War": {
+    "Robber 1": 60,
+    "Driver": 70,
+    "Robber 2": 60,
+    "Robber 3": 70,
+    "Bomber 1": 60,
+    "Bomber 2": 60
+  },
+  "Sneaky Git Grab": {
+    "Imiator": 55,
+    "Pickpocket": 70,
+    "Hacker": 60,
+    "Techie": 60
+  }
+}
