@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      4.1
+// @version      4.2
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
@@ -186,6 +186,19 @@
         }
         if (!name) return null;
         return name.replace(/#/g, '').replace(/\s+/g, ' ').trim();
+    }
+
+    // Resolve the success threshold for a slot using the fallback chain:
+    // 1. remoteConfig[crimeName][positionName]
+    // 2. thresholds[level] (per-level fallback)
+    function getThreshold(level, crimeCard, slotElement) {
+        const crimeName = getCrimeName(crimeCard);
+        const positionName = getPositionName(slotElement);
+        if (crimeName && positionName && remoteConfig[crimeName]) {
+            const posThreshold = remoteConfig[crimeName][positionName];
+            if (typeof posThreshold === 'number') return posThreshold;
+        }
+        return thresholds[level] ?? 0;
     }
 
     // Check if a slot has a player assigned (not empty/waiting)
@@ -598,8 +611,9 @@
             const successRate = getSuccessRate(slot);
             if (successRate === null) return;
 
-            // Highlight if below per-level threshold (threshold of 0 means never highlight)
-            if (thresholds[level] > 0 && successRate < thresholds[level]) {
+            // Highlight if below threshold (0 means never highlight)
+            const threshold = getThreshold(level, getOCCard(slot), slot);
+            if (threshold > 0 && successRate < threshold) {
                 if (currentTag !== 'lowSuccess') {
                     applyHighlight(slot, HIGHLIGHT_OUTLINE, HIGHLIGHT_BOX_SHADOW, 'lowSuccess');
                     debugLog('Low success slot: Level', level, 'Success', successRate + '%');
