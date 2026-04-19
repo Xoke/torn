@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      4.2
+// @version      4.3
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
@@ -532,7 +532,7 @@
                 elapsed += POLL_INTERVAL_MS;
                 const tooltip = document.querySelector('[role="tooltip"]');
                 if (tooltip) {
-                    const match = tooltip.textContent.match(/Used item:\s*(.+?)(?:\n|$)/);
+                    const match = tooltip.textContent.match(/(?:Used|Required) item:\s*(.+?)(?:\n|$)/);
                     if (match) {
                         clearInterval(poll);
                         slotHeader.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true, cancelable: true }));
