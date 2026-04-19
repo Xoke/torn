@@ -80,5 +80,68 @@
     "Pickpocket": 70,
     "Hacker": 60,
     "Techie": 60
+  },
+  "Blast From The Past": {
+    "Picklock 1": 60,
+    "Hacker": 60,
+    "Engineer": 70,
+    "Bomber": 65,
+    "Muscle": 70,
+    "Picklock 2": 60
+  },
+  "Window of Opportunity": {
+    "Engineer": 60,
+    "Looter 1": 60,
+    "Looter 2": 60,
+    "Muscle 1": 60,
+    "Muscle 2": 60
+  },
+  "Break The Bank": {
+    "Robber 1": 60,
+    "Muscle 1": 60,
+    "Muscle 2": 60,
+    "Thief 1": 60,
+    "Muscle 3": 65,
+    "Thief 2": 65
+  },
+  "Stacking the Deck": {
+    "Cat Burglar": 65,
+    "Driver": 55,
+    "Hacker": 60,
+    "Imitator": 65
+  },
+  "Clinical Precision": {
+    "Imitator": 65,
+    "Cat Burglar": 60,
+    "Assassin": 60,
+    "Cleaner": 60
+  },
+  "Manifest Cruelty": {
+    "Hacker": 60,
+    "Interrogator": 60,
+    "Reviver": 65,
+    "Cat Burglar": 60
+  },
+  "Ace in the Hole": {
+    "Imitator": 60,
+    "Muscle 1": 60,
+    "Muscle 2": 60,
+    "Hacker": 65,
+    "Driver": 60
+  },
+  "Gone Fission": {
+    "Hijacker": 65,
+    "Engineer": 60,
+    "Pickpocket": 60,
+    "Imitator": 65,
+    "Bomber": 60
+  },
+  "Crane Reaction": {
+    "Sniper": 65,
+    "Lookout": 60,
+    "Engineer": 60,
+    "Bomber": 60,
+    "Muscle 1": 60,
+    "Muscle 2": 60
   }
 }
