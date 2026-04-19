@@ -154,6 +154,40 @@
         return isNaN(level) ? null : level;
     }
 
+    // Get the crime name from a crime card element
+    function getCrimeName(crimeCard) {
+        if (!crimeCard) return null;
+        // Try common class patterns for the crime title
+        const nameEl = crimeCard.querySelector('[class*="title___"]') ||
+                       crimeCard.querySelector('[class*="name___"]') ||
+                       crimeCard.querySelector('[class*="crimeName___"]');
+        if (!nameEl) return null;
+        return nameEl.textContent.trim() || null;
+    }
+
+    // Get the position/role name from a slot element, normalized to match config format
+    // DOM shows "Looter #1", config uses "Looter 1" — strip the #
+    function getPositionName(slotElement) {
+        // Try specific role name class first, then fall back to first text in slot header
+        const nameEl = slotElement.querySelector('[class*="roleName___"]') ||
+                       slotElement.querySelector('[class*="positionName___"]') ||
+                       slotElement.querySelector('[class*="slotName___"]');
+        let name = null;
+        if (nameEl) {
+            name = nameEl.textContent.trim();
+        } else {
+            // Fallback: first text node inside slotHeader
+            const header = slotElement.querySelector('[class*="slotHeader___"]');
+            if (header) {
+                const walker = document.createTreeWalker(header, NodeFilter.SHOW_TEXT);
+                const node = walker.nextNode();
+                name = node ? node.textContent.trim() : null;
+            }
+        }
+        if (!name) return null;
+        return name.replace(/#/g, '').replace(/\s+/g, ' ').trim();
+    }
+
     // Check if a slot has a player assigned (not empty/waiting)
     function hasPlayer(slotElement) {
         // If it has validSlot class, it has a player
