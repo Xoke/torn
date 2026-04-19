@@ -378,6 +378,51 @@
                 cursor: pointer;
                 font-family: sans-serif;
             }
+            #oc-remote-config-section {
+                margin-bottom: 12px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #334;
+            }
+            #oc-remote-config-section h4 {
+                color: #aac;
+                font-size: 11px;
+                margin: 0 0 6px 0;
+                font-weight: normal;
+                letter-spacing: 0.3px;
+            }
+            #oc-remote-config-row {
+                display: flex;
+                gap: 5px;
+                align-items: center;
+                margin-bottom: 4px;
+            }
+            #oc-config-url-input {
+                flex: 1;
+                background: #1a1a2e;
+                color: #eee;
+                border: 1px solid #445;
+                border-radius: 3px;
+                font-size: 10px;
+                padding: 3px 5px;
+                font-family: monospace;
+            }
+            #oc-config-load-now {
+                background: #2a2a3e;
+                color: #aac;
+                border: 1px solid #445;
+                border-radius: 3px;
+                padding: 3px 8px;
+                font-size: 10px;
+                cursor: pointer;
+                font-family: sans-serif;
+                white-space: nowrap;
+            }
+            #oc-config-load-now:hover { background: #333355; }
+            #oc-remote-config-status {
+                font-size: 10px;
+                color: #666;
+                font-family: sans-serif;
+            }
         `;
         document.head.appendChild(style);
     })();
@@ -397,8 +442,17 @@
 
         const modal = document.createElement('div');
         modal.id = 'oc-threshold-modal';
+        const savedUrl = GM_getValue(REMOTE_CONFIG_URL_KEY, '');
         modal.innerHTML = `<div id="oc-threshold-panel">
             <h3>&#9881; OC Success Thresholds</h3>
+            <div id="oc-remote-config-section">
+                <h4>Remote Config URL</h4>
+                <div id="oc-remote-config-row">
+                    <input id="oc-config-url-input" type="text" placeholder="https://raw.githubusercontent.com/..." value="${savedUrl.replace(/"/g, '&quot;')}">
+                    <button id="oc-config-load-now">Load Now</button>
+                </div>
+                <div id="oc-remote-config-status"></div>
+            </div>
             <div class="oc-threshold-grid">${gridHTML}</div>
             <div id="oc-threshold-footer">
                 <button id="oc-threshold-save">Save</button>
@@ -414,6 +468,8 @@
                 if (!isNaN(val) && val >= 0 && val <= 100) thresholds[lvl] = val;
             }
             saveThresholds();
+            const urlInput = document.getElementById('oc-config-url-input');
+            if (urlInput) GM_setValue(REMOTE_CONFIG_URL_KEY, urlInput.value.trim());
             modal.classList.remove('open');
             runAllChecks();
         });
@@ -424,6 +480,15 @@
 
         modal.addEventListener('mousedown', e => {
             if (e.target === modal) modal.classList.remove('open');
+        });
+
+        document.getElementById('oc-config-load-now').addEventListener('click', () => {
+            const urlInput = document.getElementById('oc-config-url-input');
+            const url = urlInput.value.trim();
+            GM_setValue(REMOTE_CONFIG_URL_KEY, url);
+            const statusEl = document.getElementById('oc-remote-config-status');
+            if (statusEl) statusEl.textContent = 'Loading...';
+            loadRemoteConfig(true);
         });
     }
 
@@ -444,6 +509,7 @@
                 const input = document.getElementById(`oc-lvl-${lvl}`);
                 if (input) input.value = thresholds[lvl];
             }
+            updateRemoteConfigStatus();
             document.getElementById('oc-threshold-modal').classList.add('open');
         });
         wrap.appendChild(btn);
