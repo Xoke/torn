@@ -742,6 +742,7 @@
 
         debugLog('Initialized');
         injectSettingsUI();
+        loadRemoteConfig(false);
         runAllChecks();
 
         // Set up MutationObserver with debouncing
