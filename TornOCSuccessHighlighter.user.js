@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      4.1
+// @version      4.2
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
@@ -522,17 +522,32 @@
         return new Promise(resolve => {
             slotHeader.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, cancelable: true }));
             slotHeader.dispatchEvent(new MouseEvent('mouseover',  { bubbles: true, cancelable: true }));
-            setTimeout(() => {
+
+            // Poll for the tooltip text rather than using a fixed delay
+            const MAX_WAIT_MS = 1500;
+            const POLL_INTERVAL_MS = 50;
+            let elapsed = 0;
+
+            const poll = setInterval(() => {
+                elapsed += POLL_INTERVAL_MS;
                 const tooltip = document.querySelector('[role="tooltip"]');
-                let itemName = null;
                 if (tooltip) {
                     const match = tooltip.textContent.match(/Used item:\s*(.+?)(?:\n|$)/);
-                    if (match) itemName = match[1].trim();
+                    if (match) {
+                        clearInterval(poll);
+                        slotHeader.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true, cancelable: true }));
+                        slotHeader.dispatchEvent(new MouseEvent('mouseout',   { bubbles: true, cancelable: true }));
+                        resolve(match[1].trim());
+                        return;
+                    }
                 }
-                slotHeader.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true, cancelable: true }));
-                slotHeader.dispatchEvent(new MouseEvent('mouseout',   { bubbles: true, cancelable: true }));
-                resolve(itemName || '?');
-            }, 300);
+                if (elapsed >= MAX_WAIT_MS) {
+                    clearInterval(poll);
+                    slotHeader.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true, cancelable: true }));
+                    slotHeader.dispatchEvent(new MouseEvent('mouseout',   { bubbles: true, cancelable: true }));
+                    resolve('?');
+                }
+            }, POLL_INTERVAL_MS);
         });
     }
 
