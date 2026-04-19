@@ -29,6 +29,13 @@
     const DEFAULT_THRESHOLDS = { 1: 0, 2: 70, 3: 70, 4: 70, 5: 70, 6: 70, 7: 60, 8: 60, 9: 60, 10: 60 };
     let thresholds = Object.assign({}, DEFAULT_THRESHOLDS);
 
+    const REMOTE_CONFIG_KEY = 'oc_remote_config';
+    const REMOTE_CONFIG_TS_KEY = 'oc_remote_config_ts';
+    const REMOTE_CONFIG_URL_KEY = 'oc_config_url';
+    const REMOTE_CONFIG_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+    let remoteConfig = {};
+
     function loadThresholds() {
         const saved = GM_getValue('oc_thresholds', null);
         if (!saved) return;
@@ -44,7 +51,71 @@
         GM_setValue('oc_thresholds', JSON.stringify(thresholds));
     }
 
+    function loadCachedRemoteConfig() {
+        const cached = GM_getValue(REMOTE_CONFIG_KEY, null);
+        if (!cached) return;
+        try { remoteConfig = JSON.parse(cached); } catch (e) {}
+    }
+
+    function loadRemoteConfig(forceRefresh) {
+        const configUrl = GM_getValue(REMOTE_CONFIG_URL_KEY, '');
+        if (!configUrl) return;
+
+        if (!forceRefresh) {
+            const ts = GM_getValue(REMOTE_CONFIG_TS_KEY, 0);
+            if (Date.now() - ts < REMOTE_CONFIG_TTL_MS) {
+                loadCachedRemoteConfig();
+                updateRemoteConfigStatus();
+                return;
+            }
+        }
+
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: configUrl,
+            onload: function(response) {
+                try {
+                    const parsed = JSON.parse(response.responseText);
+                    remoteConfig = parsed;
+                    GM_setValue(REMOTE_CONFIG_KEY, response.responseText);
+                    GM_setValue(REMOTE_CONFIG_TS_KEY, Date.now());
+                    GM_setValue('oc_remote_config_status', 'ok');
+                } catch (e) {
+                    GM_setValue('oc_remote_config_status', 'error');
+                    loadCachedRemoteConfig();
+                }
+                updateRemoteConfigStatus();
+                runAllChecks();
+            },
+            onerror: function() {
+                GM_setValue('oc_remote_config_status', 'error');
+                loadCachedRemoteConfig();
+                updateRemoteConfigStatus();
+            }
+        });
+    }
+
+    function updateRemoteConfigStatus() {
+        const el = document.getElementById('oc-remote-config-status');
+        if (!el) return;
+        const configUrl = GM_getValue(REMOTE_CONFIG_URL_KEY, '');
+        if (!configUrl) {
+            el.textContent = 'Not set';
+            return;
+        }
+        const status = GM_getValue('oc_remote_config_status', '');
+        const ts = GM_getValue(REMOTE_CONFIG_TS_KEY, 0);
+        if (status === 'error') {
+            el.textContent = 'Failed' + (ts ? ' (using cache from ' + new Date(ts).toLocaleString() + ')' : '');
+        } else if (ts) {
+            el.textContent = 'Last loaded: ' + new Date(ts).toLocaleString();
+        } else {
+            el.textContent = 'Not yet loaded';
+        }
+    }
+
     loadThresholds();
+    loadCachedRemoteConfig();
 
     // Low success rate styling (red)
     const HIGHLIGHT_OUTLINE = '2px solid #ffff00';
