@@ -32,6 +32,7 @@
     const REMOTE_CONFIG_KEY = 'oc_remote_config';
     const REMOTE_CONFIG_TS_KEY = 'oc_remote_config_ts';
     const REMOTE_CONFIG_URL_KEY = 'oc_config_url';
+    const REMOTE_CONFIG_STATUS_KEY = 'oc_remote_config_status';
     const REMOTE_CONFIG_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
     let remoteConfig = {};
@@ -79,18 +80,19 @@
                     remoteConfig = parsed;
                     GM_setValue(REMOTE_CONFIG_KEY, response.responseText);
                     GM_setValue(REMOTE_CONFIG_TS_KEY, Date.now());
-                    GM_setValue('oc_remote_config_status', 'ok');
+                    GM_setValue(REMOTE_CONFIG_STATUS_KEY, 'ok');
                 } catch (e) {
-                    GM_setValue('oc_remote_config_status', 'error');
+                    GM_setValue(REMOTE_CONFIG_STATUS_KEY, 'error');
                     loadCachedRemoteConfig();
                 }
                 updateRemoteConfigStatus();
                 runAllChecks();
             },
             onerror: function() {
-                GM_setValue('oc_remote_config_status', 'error');
+                GM_setValue(REMOTE_CONFIG_STATUS_KEY, 'error');
                 loadCachedRemoteConfig();
                 updateRemoteConfigStatus();
+                runAllChecks();
             }
         });
     }
@@ -103,7 +105,7 @@
             el.textContent = 'Not set';
             return;
         }
-        const status = GM_getValue('oc_remote_config_status', '');
+        const status = GM_getValue(REMOTE_CONFIG_STATUS_KEY, '');
         const ts = GM_getValue(REMOTE_CONFIG_TS_KEY, 0);
         if (status === 'error') {
             el.textContent = 'Failed' + (ts ? ' (using cache from ' + new Date(ts).toLocaleString() + ')' : '');
