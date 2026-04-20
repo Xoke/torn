@@ -125,4 +125,78 @@
             background: #3b7;
         }
     `);
+
+    function buildBanner() {
+        if (bannerEl) return;
+        bannerEl = document.createElement('div');
+        bannerEl.id = 'torn-pw-banner';
+        const inner = document.createElement('div');
+        inner.id = 'torn-pw-inner';
+        bannerEl.appendChild(inner);
+        document.body.appendChild(bannerEl);
+    }
+
+    function showSetupUI() {
+        buildBanner();
+        const inner = bannerEl.querySelector('#torn-pw-inner');
+        inner.innerHTML = '';
+
+        const setup = document.createElement('div');
+        setup.id = 'torn-pw-setup';
+        setup.innerHTML = '<span>Property Watcher: enter API key</span>';
+
+        const input = document.createElement('input');
+        input.id = 'torn-pw-key-input';
+        input.type = 'text';
+        input.placeholder = 'Torn API key (16 chars)';
+        input.maxLength = 16;
+
+        const save = document.createElement('button');
+        save.id = 'torn-pw-key-save';
+        save.textContent = 'Save';
+        save.addEventListener('click', function () {
+            const val = input.value.trim();
+            if (!/^[a-zA-Z0-9]{16}$/.test(val)) {
+                input.style.borderColor = '#c33';
+                return;
+            }
+            apiKey = val;
+            GM_setValue(API_KEY_STORAGE, apiKey);
+            hideBanner();
+            startPolling();
+        });
+
+        setup.appendChild(input);
+        setup.appendChild(save);
+        inner.appendChild(setup);
+    }
+
+    function showAlertUI(price, propertyId) {
+        buildBanner();
+        const inner = bannerEl.querySelector('#torn-pw-inner');
+        inner.innerHTML = '';
+
+        const link = document.createElement('a');
+        link.id = 'torn-pw-link';
+        link.href = MARKET_URL;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = 'PI available for $' + price.toLocaleString() + ' \u2014 Click to buy';
+
+        const dismiss = document.createElement('button');
+        dismiss.id = 'torn-pw-dismiss';
+        dismiss.textContent = '\u00d7';
+        dismiss.title = 'Dismiss';
+        dismiss.addEventListener('click', function () {
+            hideBanner();
+        });
+
+        inner.appendChild(link);
+        inner.appendChild(dismiss);
+        bannerEl.style.display = '';
+    }
+
+    function hideBanner() {
+        if (bannerEl) bannerEl.style.display = 'none';
+    }
 })();
