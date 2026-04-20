@@ -199,4 +199,29 @@
     function hideBanner() {
         if (bannerEl) bannerEl.style.display = 'none';
     }
+
+    function playAlert() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+            function playTone(freq, startTime, duration) {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.4, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+                osc.start(startTime);
+                osc.stop(startTime + duration);
+            }
+
+            const t = ctx.currentTime;
+            playTone(880, t, 0.2);
+            playTone(1100, t + 0.22, 0.2);
+        } catch (e) {
+            debugLog('Audio failed:', e);
+        }
+    }
 })();
