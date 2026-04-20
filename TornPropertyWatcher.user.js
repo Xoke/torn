@@ -224,4 +224,52 @@
             debugLog('Audio failed:', e);
         }
     }
+
+    function checkMarket() {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: 'https://api.torn.com/v2/market/' + PROPERTY_TYPE_ID + '/properties?key=' + apiKey,
+            onload: function (response) {
+                let data;
+                try {
+                    data = JSON.parse(response.responseText);
+                } catch (e) {
+                    debugLog('JSON parse error:', e);
+                    return;
+                }
+
+                if (data.error) {
+                    debugLog('API error:', data.error);
+                    return;
+                }
+
+                const listings = data.properties || [];
+                const cheap = listings
+                    .filter(function (p) { return p.cost < PRICE_THRESHOLD; })
+                    .sort(function (a, b) { return a.cost - b.cost; });
+
+                if (cheap.length === 0) {
+                    lastAlertedId = null;
+                    return;
+                }
+
+                const best = cheap[0];
+                if (best.id === lastAlertedId) return;
+
+                lastAlertedId = best.id;
+                debugLog('Found cheap PI:', best.id, best.cost);
+                playAlert();
+                showAlertUI(best.cost, best.id);
+            },
+            onerror: function (err) {
+                debugLog('Request error:', err);
+            }
+        });
+    }
+
+    function startPolling() {
+        if (pollTimer) clearInterval(pollTimer);
+        checkMarket();
+        pollTimer = setInterval(checkMarket, POLL_INTERVAL);
+    }
 })();
