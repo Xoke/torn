@@ -272,4 +272,18 @@
         checkMarket();
         pollTimer = setInterval(checkMarket, POLL_INTERVAL);
     }
+
+    function initialize() {
+        if (!apiKey) {
+            showSetupUI();
+            return;
+        }
+        startPolling();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initialize);
+    } else {
+        initialize();
+    }
 })();
