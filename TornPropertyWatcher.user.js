@@ -171,7 +171,7 @@
         inner.appendChild(setup);
     }
 
-    function showAlertUI(price, propertyId) {
+    function showAlertUI(price) {
         buildBanner();
         const inner = bannerEl.querySelector('#torn-pw-inner');
         inner.innerHTML = '';
@@ -259,7 +259,7 @@
                 lastAlertedId = best.id;
                 debugLog('Found cheap PI:', best.id, best.cost);
                 playAlert();
-                showAlertUI(best.cost, best.id);
+                showAlertUI(best.cost);
             },
             onerror: function (err) {
                 debugLog('Request error:', err);
