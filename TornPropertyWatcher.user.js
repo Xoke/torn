@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Property Watcher
 // @namespace    https://xoke.org/
-// @version      1.1
+// @version      1.2
 // @description  Alerts when a cheap Private Island appears on the Torn property market
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -28,7 +28,7 @@
     const POLL_INTERVAL = 10000;
     const PROPERTY_TYPE_ID = 13; // Private Island
     const API_KEY_STORAGE = 'tornPropertyWatcherApiKey';
-    const MARKET_URL = 'https://www.torn.com/properties.php#/p=market';
+    const MARKET_URL = 'https://www.torn.com/properties.php?step=sellingmarket#/property=13';
 
     function debugLog(...args) {
         if (DEBUG) console.log('[Property Watcher]', ...args);
@@ -248,7 +248,7 @@
 
                 const listings = (data.properties && data.properties.listings) || [];
                 const cheap = listings
-                    .filter(function (p) { return p.cost < PRICE_THRESHOLD; })
+                    .filter(function (p) { return p.happy === 4225 && p.cost < PRICE_THRESHOLD; })
                     .sort(function (a, b) { return a.cost - b.cost; });
 
                 if (cheap.length === 0) {
