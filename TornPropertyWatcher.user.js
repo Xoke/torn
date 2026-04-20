@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Property Watcher
 // @namespace    https://xoke.org/
-// @version      1.0
+// @version      1.1
 // @description  Alerts when a cheap Private Island appears on the Torn property market
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -246,7 +246,7 @@
                     return;
                 }
 
-                const listings = data.properties || [];
+                const listings = (data.properties && data.properties.listings) || [];
                 const cheap = listings
                     .filter(function (p) { return p.cost < PRICE_THRESHOLD; })
                     .sort(function (a, b) { return a.cost - b.cost; });
