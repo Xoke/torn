@@ -28,6 +28,9 @@ Comprehensive target management tool for tracking and organizing attack targets.
 ### [Torn Xanax Reminder](https://raw.githubusercontent.com/Xoke/torn/main/TornXanaxReminder.user.js)
 Reminds you to take your Xanax when you have no drug cooldown. Shows a small clickable banner that takes you to your items page. Amended from [Don't forget your Xanax](https://greasyfork.org/en/scripts/490129-don-t-forget-your-xanax) by Shade — bar is now smaller and clickable, and removed embedded analytics script.
 
+### [Torn Property Watcher](https://raw.githubusercontent.com/Xoke/torn/main/TornPropertyWatcher.user.js)
+Watches the Torn property market for cheap Private Islands (under $1.7 billion). Plays an audio chime and shows a clickable banner when one appears. Polls every 10 seconds. Requires an API key on first run.
+
 ### [Torn Vault Catcher](https://raw.githubusercontent.com/Xoke/torn/main/TornVaultCatcher.user.js)
 Warns faction bankers when giving a member more money than their vault balance, helping prevent accidental overpayments from faction funds.
 
