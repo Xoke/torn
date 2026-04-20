@@ -38,6 +38,8 @@
     let lastAlertedId = null;
     let bannerEl = null;
     let pollTimer = null;
+    let audioCtx = null;
+    const dismissedIds = new Set();
 
     GM_addStyle(`
         #torn-pw-banner {
@@ -188,6 +190,7 @@
         dismiss.textContent = '\u00d7';
         dismiss.title = 'Dismiss';
         dismiss.addEventListener('click', function () {
+            if (lastAlertedId !== null) dismissedIds.add(lastAlertedId);
             hideBanner();
         });
 
@@ -202,13 +205,13 @@
 
     function playAlert() {
         try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
             function playTone(freq, startTime, duration) {
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
                 osc.connect(gain);
-                gain.connect(ctx.destination);
+                gain.connect(audioCtx.destination);
                 osc.type = 'sine';
                 osc.frequency.value = freq;
                 gain.gain.setValueAtTime(0.4, startTime);
@@ -217,7 +220,7 @@
                 osc.stop(startTime + duration);
             }
 
-            const t = ctx.currentTime;
+            const t = audioCtx.currentTime;
             playTone(880, t, 0.2);
             playTone(1100, t + 0.22, 0.2);
         } catch (e) {
@@ -254,7 +257,7 @@
                 }
 
                 const best = cheap[0];
-                if (best.id === lastAlertedId) return;
+                if (best.id === lastAlertedId || dismissedIds.has(best.id)) return;
 
                 lastAlertedId = best.id;
                 debugLog('Found cheap PI:', best.id, best.cost);
