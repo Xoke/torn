@@ -423,6 +423,19 @@
                 color: #666;
                 font-family: sans-serif;
             }
+            #oc-use-remote-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin-top: 6px;
+                font-size: 11px;
+                color: #aaa;
+                font-family: sans-serif;
+            }
+            #oc-use-remote-row input[type="checkbox"] {
+                accent-color: #667;
+                cursor: pointer;
+            }
         `;
         document.head.appendChild(style);
     })();
@@ -451,6 +464,10 @@
                     <input id="oc-config-url-input" type="text" placeholder="https://raw.githubusercontent.com/..." value="${savedUrl.replace(/"/g, '&quot;')}">
                     <button id="oc-config-load-now">Load Now</button>
                 </div>
+                <div id="oc-use-remote-row">
+                    <input type="checkbox" id="oc-use-remote-cb" checked>
+                    <label for="oc-use-remote-cb">Use remote config thresholds</label>
+                </div>
                 <div id="oc-remote-config-status"></div>
             </div>
             <div class="oc-threshold-grid">${gridHTML}</div>
@@ -470,6 +487,8 @@
             saveThresholds();
             const urlInput = document.getElementById('oc-config-url-input');
             if (urlInput) GM_setValue(REMOTE_CONFIG_URL_KEY, urlInput.value.trim());
+            const cb = document.getElementById('oc-use-remote-cb');
+            if (cb) GM_setValue('oc_use_remote_config', cb.checked);
             modal.classList.remove('open');
             runAllChecks();
         });
@@ -510,6 +529,8 @@
                 if (input) input.value = thresholds[lvl];
             }
             updateRemoteConfigStatus();
+            const cb = document.getElementById('oc-use-remote-cb');
+            if (cb) cb.checked = GM_getValue('oc_use_remote_config', true);
             document.getElementById('oc-threshold-modal').classList.add('open');
         });
         wrap.appendChild(btn);
