@@ -33,6 +33,7 @@
     const REMOTE_CONFIG_TS_KEY = 'oc_remote_config_ts';
     const REMOTE_CONFIG_URL_KEY = 'oc_config_url';
     const REMOTE_CONFIG_STATUS_KEY = 'oc_remote_config_status';
+    const REMOTE_CONFIG_USE_KEY = 'oc_use_remote_config';
     const REMOTE_CONFIG_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
     let remoteConfig = {};
@@ -488,7 +489,7 @@
             const urlInput = document.getElementById('oc-config-url-input');
             if (urlInput) GM_setValue(REMOTE_CONFIG_URL_KEY, urlInput.value.trim());
             const cb = document.getElementById('oc-use-remote-cb');
-            if (cb) GM_setValue('oc_use_remote_config', cb.checked);
+            if (cb) GM_setValue(REMOTE_CONFIG_USE_KEY, cb.checked);
             modal.classList.remove('open');
             runAllChecks();
         });
@@ -530,7 +531,7 @@
             }
             updateRemoteConfigStatus();
             const cb = document.getElementById('oc-use-remote-cb');
-            if (cb) cb.checked = GM_getValue('oc_use_remote_config', true);
+            if (cb) cb.checked = GM_getValue(REMOTE_CONFIG_USE_KEY, true);
             document.getElementById('oc-threshold-modal').classList.add('open');
         });
         wrap.appendChild(btn);
