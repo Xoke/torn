@@ -195,7 +195,7 @@
     function getThreshold(level, crimeCard, slotElement) {
         const crimeName = getCrimeName(crimeCard);
         const positionName = getPositionName(slotElement);
-        if (crimeName && positionName && remoteConfig[crimeName]) {
+        if (GM_getValue(REMOTE_CONFIG_USE_KEY, true) && crimeName && positionName && remoteConfig[crimeName]) {
             const posThreshold = remoteConfig[crimeName][positionName];
             if (typeof posThreshold === 'number') return posThreshold;
         }
