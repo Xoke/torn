@@ -67,6 +67,9 @@ Scripts by other authors that I've found useful.
 ### Extensions
 - [Torn Tools](https://github.com/Mephiles/torntools_extension) - Comprehensive browser extension with a wide range of quality-of-life features across the game.
 
+### Mobile Apps
+- [Torn PDA](https://www.torn.com/forums.php#/p=threads&t=16163503) - Feature-rich mobile app for Torn with notifications, target lists, travel assistance, and more.
+
 ## Installation
 
 1. Install a userscript manager like [Tampermonkey](https://www.tampermonkey.net/) or [Greasemonkey](https://www.greasespot.net/)
