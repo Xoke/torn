@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Bank Rounder
 // @namespace    https://xoke.org/
-// @version      1.1
+// @version      1.2
 // @description  Adds a button to auto-fill deposit amount to the highest achievable $5M multiple
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -28,21 +28,13 @@
     }
 
     function getBalances() {
-        // The armoury page shows: "You have $X and a balance of $Y"
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-        let node;
-        while ((node = walker.nextNode())) {
-            const match = node.textContent.match(
-                /You have \$([0-9,]+) and a balance of \$([0-9,]+)/i
-            );
-            if (match) {
-                return {
-                    cash: parseInt(match[1].replace(/,/g, ''), 10),
-                    bank: parseInt(match[2].replace(/,/g, ''), 10),
-                };
-            }
-        }
-        return null;
+        const cashEl = document.querySelector('span.i-have');
+        const bankEl = document.querySelector('span.money-balance');
+        if (!cashEl || !bankEl) return null;
+        const cash = parseInt(cashEl.textContent.replace(/,/g, ''), 10);
+        const bank = parseInt(bankEl.textContent.replace(/,/g, ''), 10);
+        if (isNaN(cash) || isNaN(bank)) return null;
+        return { cash, bank };
     }
 
     function calcDeposit(bank, cash) {

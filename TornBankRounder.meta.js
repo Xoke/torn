@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Bank Rounder
 // @namespace    https://xoke.org/
-// @version      1.1
+// @version      1.2
 // @description  Adds a button to auto-fill deposit amount to the highest achievable $5M multiple
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
