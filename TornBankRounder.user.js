@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Bank Rounder
 // @namespace    https://xoke.org/
-// @version      1.2
+// @version      1.3
 // @description  Adds a button to auto-fill deposit amount to the highest achievable $5M multiple
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -46,7 +46,7 @@
 
     function setInput(input, value) {
         const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-        nativeSetter.call(input, '$' + value.toLocaleString());
+        nativeSetter.call(input, String(value));
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
     }
