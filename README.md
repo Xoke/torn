@@ -31,6 +31,9 @@ Reminds you to take your Xanax when you have no drug cooldown. Shows a small cli
 ### [Torn Property Watcher](https://raw.githubusercontent.com/Xoke/torn/main/TornPropertyWatcher.user.js)
 Watches the Torn property market for cheap Private Islands (under $1.7 billion). Plays an audio chime and shows a clickable banner when one appears. Polls every 10 seconds. Requires an API key on first run.
 
+### [Torn Bank Rounder](https://raw.githubusercontent.com/Xoke/torn/main/TornBankRounder.user.js)
+Adds a "5M" button to the bank deposit form. Clicking it auto-fills the deposit amount to reach the highest achievable multiple of $5M in your bank balance, keeping at least $1M cash on hand.
+
 ### [Torn Vault Catcher](https://raw.githubusercontent.com/Xoke/torn/main/TornVaultCatcher.user.js)
 Warns faction bankers when giving a member more money than their vault balance, helping prevent accidental overpayments from faction funds.
 
