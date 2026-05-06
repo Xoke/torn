@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      4.4
+// @version      4.5
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
@@ -12,7 +12,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
-// @connect      *
+// @connect      *  // user-configurable remote config URL may point to any domain
 // ==/UserScript==
 
 (function() {
@@ -209,7 +209,7 @@
         if (!slotBody) return false;
 
         // Check for validSlot class (indicates filled slot)
-        if (slotBody.className.includes('validSlot')) return true;
+        if ((slotBody.getAttribute('class') || '').includes('validSlot')) return true;
 
         // Check for badge container (player badge)
         if (slotBody.querySelector('[class*="badgeContainer___"]')) return true;
@@ -456,13 +456,12 @@
 
         const modal = document.createElement('div');
         modal.id = 'oc-threshold-modal';
-        const savedUrl = GM_getValue(REMOTE_CONFIG_URL_KEY, '');
         modal.innerHTML = `<div id="oc-threshold-panel">
             <h3>&#9881; OC Success Thresholds</h3>
             <div id="oc-remote-config-section">
                 <h4>Remote Config URL</h4>
                 <div id="oc-remote-config-row">
-                    <input id="oc-config-url-input" type="text" placeholder="https://raw.githubusercontent.com/..." value="${savedUrl.replace(/"/g, '&quot;')}">
+                    <input id="oc-config-url-input" type="text" placeholder="https://raw.githubusercontent.com/...">
                     <button id="oc-config-load-now">Load Now</button>
                 </div>
                 <div id="oc-use-remote-row">
@@ -478,6 +477,9 @@
             </div>
         </div>`;
         document.body.appendChild(modal);
+        // Set URL via DOM after rendering to avoid HTML injection
+        const urlInputEl = modal.querySelector('#oc-config-url-input');
+        if (urlInputEl) urlInputEl.value = GM_getValue(REMOTE_CONFIG_URL_KEY, '');
 
         document.getElementById('oc-threshold-save').addEventListener('click', () => {
             for (let lvl = MIN_LEVEL; lvl <= MAX_LEVEL; lvl++) {
@@ -665,7 +667,7 @@
         crimeRows.forEach(row => {
             const hasDelay = row.textContent.includes('Delay:') || row.textContent.includes('Delay ');
 
-            if (hasDelay && row.className.includes('OC2-crimeID_')) {
+            if (hasDelay && (row.getAttribute('class') || '').includes('OC2-crimeID_')) {
                 row.style.setProperty('background-color', 'rgba(255, 136, 0, 0.3)', 'important');
                 row.style.setProperty('border-left', '4px solid #ff8800', 'important');
             }

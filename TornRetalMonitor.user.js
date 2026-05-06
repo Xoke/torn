@@ -1,11 +1,10 @@
 // ==UserScript==
 // @name         Torn Ranked War Retal Monitor
 // @namespace    https://xoke.org/
-// @version      1.5
+// @version      1.7
 // @description  Monitors faction attacks to identify retaliation opportunities during ranked wars
 // @author       Xoke
 // @match        https://www.torn.com/*
-// @match        https://www.tornpda.com/*
 // @run-at       document-end
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -20,25 +19,14 @@
 (function() {
     'use strict';
 
-    var DEBUG = false;
+    const DEBUG = false;
 
-    function debugLog() {
-        if (DEBUG) console.log.apply(console, ['[Torn Retal Monitor]'].concat(Array.prototype.slice.call(arguments)));
+    function debugLog(...args) {
+        if (DEBUG) console.log('[Torn Retal Monitor]', ...args);
     }
 
-    function debugError() {
-        if (DEBUG) console.error.apply(console, ['[Torn Retal Monitor]'].concat(Array.prototype.slice.call(arguments)));
-    }
-
-    // Helper function to escape HTML and prevent XSS
-    function escapeHtml(unsafe) {
-        if (typeof unsafe !== 'string') return String(unsafe);
-        return unsafe
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
+    function debugError(...args) {
+        if (DEBUG) console.error('[Torn Retal Monitor]', ...args);
     }
 
     // Validate API key (16-character alphanumeric)
@@ -50,16 +38,15 @@
     debugLog('Script initialized');
 
     // Configuration. If using with Ranked War Target Finder or Target Manager, combined API usage counts toward Torn's 100 calls/min limit.
-    var API_DELAY = 10000; // Check every 10 seconds
-    var RETAL_WINDOW = 300; // 5 minutes in seconds
-    var apiKey = GM_getValue('tornRetalApiKey', '');
-    var factionId = GM_getValue('tornRetalFactionId', '');
-    var isMonitoring = GM_getValue('tornRetalMonitoring', false);
-    var monitorInterval = null;
-    var lastCheckedTimestamp = Math.floor(Date.now() / 1000);
+    const API_DELAY = 10000; // Check every 10 seconds
+    const RETAL_WINDOW = 300; // 5 minutes in seconds
+    let apiKey = GM_getValue('tornRetalApiKey', '');
+    let factionId = GM_getValue('tornRetalFactionId', '');
+    let isMonitoring = GM_getValue('tornRetalMonitoring', false);
+    let monitorInterval = null;
 
     // Store active retal opportunities (attackerId -> retal object)
-    var activeRetals = new Map(GM_getValue('tornActiveRetals', []));
+    const activeRetals = new Map(GM_getValue('tornActiveRetals', []));
 
     // Styles
     GM_addStyle(`
@@ -825,12 +812,21 @@
         return Math.floor(diff / 86400) + 'd ago';
     }
 
-    // Play notification sound
+    // Play notification sound via Web Audio API (short double-beep)
     function playNotificationSound() {
         try {
-            var audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIHGq97OafTQ8HUKXh8LZmHQw2jdb02m8+AhJkwO/fmU8NEFym4/K5aB4JNI3V89p0QQoQX7Tn66dOFQ1NoeHxtWQcCTKQ1/HWdywEJ3/L8diKOQoXabvt5qBOEAxNpOHwuGcxBjWP1vPbeywGKH3J8NmQOwoXZ7ns551NEAxTp+PwuGorBzOR1/LYdywGJ4HN8tiIOQkXa7zt6KFOEQxPpOPxt2MdCDOP1vPac0UJEX/F89mMPgoXZLrr56JPEwxOo+Xxu2YdCTOP1fLZdC0GJX7K8NuOPAoYZbrw551NEApQp+TwtmQdCTOP1vPadC0GJYHLMdyOOwkYZLnw5p5OEgxPpePyu2UeCTSP1fPbdywFKH7M8NqMOwsVaLnt5qBMEw1Ooyf0uWcdCTKQ1vLYdS4FJn/J8NmNPQ8Xabrv5p5NFAtPoeLwuGgeCC+N1fPbdysGJ4DK8NmNPQ8VZ7nu5qFNEw1Poubwt2QdCTOP1fLYdS4EJn7K8NqNOwsVaLnt5qBNEgtPo+TwuGYdCTSP1vPZdC4EJ3/K8NmMOwsXZ7nx5p9OEQxNoeTwuGYdCDKQ1/LZdSwGJ4HL8NiNOwsXZrrw5p5NEgxNoeTwuGYdCDOP1vLYdSwGJ4HL8NmMOwsWZ7nx5p5OEgxOoubwt2QeCTSQ1fLYdSwGJoDK8dmNOwsXaLrw5p5NEgtOo+TwuGYdCDOP1/LYdSwFKH/K8NmNPAsWaLnt5p5NEgxOo+XvuGcdCDOP1/LXdCwGKIDL8dmNPAsWZ7nx5p5OEgxOo+XwuGYdBzOP1/LYdSwGJ4DL8NmNPAsWZrrx5p5OEgxNo+XwuGYdCDOP1/LYdSwGJ4HL8NiNOwsWZ7rx5p5OEgtOo+XwuGYdCTOP1/LYdCwGJ4DK8dmMOwsWaLrw5p5OEgxNo+TwuGYdBzOQ1/LYdCwGJ4DL8dmMOwsWZ7rx5p5OEgxNo+XwuGYdCDOP1/LYdCwGJ4HL8dmNOwsWZ7rx5p5OEgxNo+XwuGYdCDOP1/LYdCwGJ4DL8NmNOwsWZ7nx5p5OEgxOo+Xwt2YdCDOP1/LYdCwGJ4HL8NmNOwsWZ7nx5p5OEgxOo+Xwt2YdCDOP1/LYdCwGJ4HL8NmNOwsWZ7nx5p5OEgxOo+Xwt2YdCDOP1/LYdCwGJ4HL8NmNOwsWZ7nx5p5OEgxOo+Xwt2YdCDOP');
-            audio.play().catch(function() {
-                // Silently fail if browser blocks audio
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            [0, 0.18].forEach(function(startOffset) {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = 880;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.25, ctx.currentTime + startOffset);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startOffset + 0.15);
+                osc.start(ctx.currentTime + startOffset);
+                osc.stop(ctx.currentTime + startOffset + 0.15);
             });
         } catch (e) {
             // Audio not supported or blocked

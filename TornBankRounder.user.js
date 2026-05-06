@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Bank Rounder
 // @namespace    https://xoke.org/
-// @version      1.3
+// @version      1.4
 // @description  Adds a button to auto-fill deposit amount to the highest achievable $5M multiple
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -21,6 +21,21 @@
 
     function debugLog(...args) {
         if (DEBUG) console.log('[Bank Rounder]', ...args);
+    }
+
+    function showNotification(message, type) {
+        const n = document.createElement('div');
+        n.textContent = message;
+        n.style.cssText =
+            'position:fixed;top:20px;right:20px;z-index:99999;' +
+            'padding:10px 16px;border-radius:5px;font-size:12px;font-weight:bold;' +
+            'background:' + (type === 'error' ? '#c0392b' : '#27ae60') + ';' +
+            'color:white;box-shadow:0 2px 8px rgba(0,0,0,0.4);transition:opacity 0.3s;';
+        document.body.appendChild(n);
+        setTimeout(function () {
+            n.style.opacity = '0';
+            setTimeout(function () { n.remove(); }, 300);
+        }, 3000);
     }
 
     function isArmouryTab() {
@@ -81,13 +96,13 @@
             e.preventDefault();
             const balances = getBalances();
             if (!balances) {
-                alert('Bank Rounder: Could not find balance text on page.');
+                showNotification('Could not find balance text on page.', 'error');
                 return;
             }
             debugLog('Cash:', balances.cash, 'Bank:', balances.bank);
             const deposit = calcDeposit(balances.bank, balances.cash);
             if (deposit <= 0) {
-                alert('Bank Rounder: Not enough cash to reach next $5M milestone (keeping $1M minimum).');
+                showNotification('Not enough cash to reach next $5M milestone (keeping $1M minimum).', 'error');
                 return;
             }
             debugLog('Depositing:', deposit);

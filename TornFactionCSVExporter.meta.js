@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Faction CSV Exporter
 // @namespace    https://xoke.org/
-// @version      3.0
+// @version      3.1
 // @description  CSV exporter with battle stats sorting (highest to lowest)
 // @author       Xoke
 // @match        https://www.torn.com/factions.php?*

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Faction CSV Exporter
 // @namespace    https://xoke.org/
-// @version      3.0
+// @version      3.1
 // @description  CSV exporter with battle stats sorting (highest to lowest)
 // @author       Xoke
 // @match        https://www.torn.com/factions.php?*
@@ -16,7 +16,7 @@
     'use strict';
 
     const DEBUG = false;
-    const VERSION = '3.0';
+    const VERSION = '3.1';
     const MULTIPLIERS = { k: 1000, m: 1000000, b: 1000000000 };
 
     function debugLog(...args) {
@@ -70,7 +70,6 @@
     }
 
     function createButton() {
-        if (!window.location.href.includes('factions.php')) return;
         if (document.getElementById('csv-export-btn')) return;
 
         const titleArea = document.querySelector('.content-title') ||

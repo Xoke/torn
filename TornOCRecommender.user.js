@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      2.2
+// @version      2.3
 // @run-at       document-end
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
@@ -129,7 +129,7 @@
 
     // Check if slot is empty (waiting for someone to join)
     function isEmptySlot(slotElement) {
-        return slotElement.className.includes('waitingJoin');
+        return (slotElement.getAttribute('class') || '').includes('waitingJoin');
     }
 
     // Count how many slots in a crime card are already filled
