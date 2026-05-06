@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      2.0
+// @version      2.2
 // @run-at       document-end
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
@@ -9,7 +9,7 @@
 // @homepageURL  https://github.com/Xoke/torn
 // @updateURL    https://raw.githubusercontent.com/Xoke/torn/main/TornOCRecommender.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Xoke/torn/main/TornOCRecommender.user.js
-// @grant        none
+// @grant        GM_getValue
 // ==/UserScript==
 
 (function() {
@@ -17,15 +17,36 @@
 
     const DEBUG = false;
 
-    function debugLog() {
-        if (DEBUG) console.log.apply(console, ['[OC Recommender]'].concat(Array.prototype.slice.call(arguments)));
+    function debugLog(...args) {
+        if (DEBUG) console.log('[OC Recommender]', ...args);
     }
 
-    // Thresholds
-    const THRESHOLD_LEVEL_2_6 = 70;  // Level 2-6 need 70%+
-    const THRESHOLD_LEVEL_7_PLUS = 50;  // Level 7+ need 50%+
-    const PREFERRED_LEVEL_7_PLUS = 60;  // Level 7+ preferred 60%+
-    const CLOSE_ENOUGH_PCT = 5;  // If success rates are within 5%, prefer OCs with more people
+    // Shared threshold config — same keys as TornOCSuccessHighlighter (read-only here)
+    const DEFAULT_THRESHOLDS = { 1: 0, 2: 70, 3: 70, 4: 70, 5: 70, 6: 70, 7: 60, 8: 60, 9: 60, 10: 60 };
+    let thresholds = Object.assign({}, DEFAULT_THRESHOLDS);
+    let remoteConfig = {};
+
+    function loadThresholds() {
+        const saved = GM_getValue('oc_thresholds', null);
+        if (!saved) return;
+        try {
+            const parsed = JSON.parse(saved);
+            for (let lvl = 1; lvl <= 10; lvl++) {
+                if (typeof parsed[lvl] === 'number') thresholds[lvl] = parsed[lvl];
+            }
+        } catch (e) {}
+    }
+
+    function loadCachedRemoteConfig() {
+        const cached = GM_getValue('oc_remote_config', null);
+        if (!cached) return;
+        try { remoteConfig = JSON.parse(cached); } catch (e) {}
+    }
+
+    loadThresholds();
+    loadCachedRemoteConfig();
+
+    const CLOSE_ENOUGH_PCT = 5;
 
     // Styling for primary recommendation
     const RECOMMEND_BORDER = '4px solid #00ff00';
@@ -37,38 +58,9 @@
     const SECONDARY_OUTLINE = '2px solid #ffcc44';
     const SECONDARY_BOX_SHADOW = '0 0 10px 3px rgba(255, 170, 0, 0.4)';
 
-    // Get crime level from a slot element
-    function getCrimeLevel(slotElement) {
-        let parent = slotElement.parentElement;
-        while (parent && !parent.hasAttribute('data-oc-id')) {
-            parent = parent.parentElement;
-            if (!parent || parent === document.body) return null;
-        }
-        if (!parent) return null;
-
-        const levelEl = parent.querySelector('[class*="levelValue___"]');
-        if (!levelEl) return null;
-
-        const level = parseInt(levelEl.textContent.trim(), 10);
-        return isNaN(level) ? null : level;
-    }
-
-    // Get crime name from a slot element
-    function getCrimeName(slotElement) {
-        let parent = slotElement.parentElement;
-        while (parent && !parent.hasAttribute('data-oc-id')) {
-            parent = parent.parentElement;
-            if (!parent || parent === document.body) return null;
-        }
-        if (!parent) return null;
-
-        const nameEl = parent.querySelector('[class*="panelTitle___"]');
-        return nameEl ? nameEl.textContent.trim() : 'Unknown';
-    }
-
-    // Get crime card element from a slot
-    function getCrimeCard(slotElement) {
-        let parent = slotElement.parentElement;
+    // Traverse up from el to find the OC crime card (data-oc-id ancestor)
+    function getOCCard(el) {
+        let parent = el.parentElement;
         while (parent && !parent.hasAttribute('data-oc-id')) {
             parent = parent.parentElement;
             if (!parent || parent === document.body) return null;
@@ -76,12 +68,71 @@
         return parent;
     }
 
+    // Get crime level from a slot element
+    function getCrimeLevel(slotElement) {
+        const card = getOCCard(slotElement);
+        if (!card) return null;
+        const levelEl = card.querySelector('[class*="levelValue___"]');
+        if (!levelEl) return null;
+        const level = parseInt(levelEl.textContent.trim(), 10);
+        return isNaN(level) ? null : level;
+    }
+
+    // Get crime name from a crime card
+    function getCrimeName(crimeCard) {
+        if (!crimeCard) return null;
+        const nameEl = crimeCard.querySelector('[class*="panelTitle___"]') ||
+                       crimeCard.querySelector('[class*="title___"]') ||
+                       crimeCard.querySelector('[class*="name___"]') ||
+                       crimeCard.querySelector('[class*="crimeName___"]');
+        return nameEl ? nameEl.textContent.trim() : null;
+    }
+
+    // Get position name from a slot, normalized to match remote config format (strip #)
+    function getPositionName(slotElement) {
+        const nameEl = slotElement.querySelector('[class*="roleName___"]') ||
+                       slotElement.querySelector('[class*="positionName___"]') ||
+                       slotElement.querySelector('[class*="slotName___"]');
+        let name = null;
+        if (nameEl) {
+            name = nameEl.textContent.trim();
+        } else {
+            const header = slotElement.querySelector('[class*="slotHeader___"]');
+            if (header) {
+                const walker = document.createTreeWalker(header, NodeFilter.SHOW_TEXT);
+                const node = walker.nextNode();
+                name = node ? node.textContent.trim() : null;
+            }
+        }
+        if (!name) return null;
+        return name.replace(/#/g, '').replace(/\s+/g, ' ').trim();
+    }
+
+    // Resolve threshold using same fallback chain as TornOCSuccessHighlighter:
+    // 1. remoteConfig[crimeName][positionName]  2. thresholds[level]
+    function getThreshold(level, crimeCard, slotElement) {
+        if (GM_getValue('oc_use_remote_config', true)) {
+            const crimeName = getCrimeName(crimeCard);
+            const positionName = getPositionName(slotElement);
+            if (crimeName && positionName && remoteConfig[crimeName]) {
+                const posThreshold = remoteConfig[crimeName][positionName];
+                if (typeof posThreshold === 'number') return posThreshold;
+            }
+        }
+        return thresholds[level] ?? 0;
+    }
+
+    // Get crime card element from a slot
+    function getCrimeCard(slotElement) {
+        return getOCCard(slotElement);
+    }
+
     // Check if slot is empty (waiting for someone to join)
     function isEmptySlot(slotElement) {
         return slotElement.className.includes('waitingJoin');
     }
 
-    // Count how many slots in a crime card are already filled (have people in them)
+    // Count how many slots in a crime card are already filled
     function getFilledSlotCount(crimeCard) {
         if (!crimeCard) return 0;
         const allSlots = crimeCard.querySelectorAll('[class*="wrapper___"][class*="success"]');
@@ -94,8 +145,7 @@
         return filled;
     }
 
-    // Get time remaining on an OC's countdown timer (DD:HH:MM:SS format)
-    // Returns total seconds remaining, or Infinity if no timer found
+    // Get time remaining on an OC's countdown timer — returns total seconds, or Infinity
     function getTimeRemaining(crimeCard) {
         if (!crimeCard) return Infinity;
         const text = crimeCard.textContent;
@@ -108,7 +158,6 @@
         return days * 86400 + hours * 3600 + minutes * 60 + seconds;
     }
 
-    // Format seconds back to readable time for logging
     function formatTime(totalSeconds) {
         if (totalSeconds === Infinity) return 'no timer';
         const d = Math.floor(totalSeconds / 86400);
@@ -121,39 +170,22 @@
     function getSuccessRate(slotElement) {
         const successEl = slotElement.querySelector('[class*="successChance___"]');
         if (!successEl) return null;
-
         const rate = parseInt(successEl.textContent.trim(), 10);
         return isNaN(rate) ? null : rate;
     }
 
-    // Get role name from slot
+    // Get role name from slot (for display in label)
     function getRoleName(slotElement) {
         const titleEl = slotElement.querySelector('[class*="title___"]');
         return titleEl ? titleEl.textContent.trim() : 'Unknown Role';
     }
 
-    // Check if the current player is already in an active OC by reading the
-    // sidebar info icon aria-label (class pattern: icon89___XXXXX).
-    // The label reads e.g. "Organized Crime: Bomber in Blast from the Past4 of 6 slots filled"
-    // when in an OC, or something without a role name when not in one.
+    // Check if the current player is already in an active OC
     function isPlayerInOC() {
         const ocLink = document.querySelector('[class*="icon89___"] a');
         if (!ocLink) return false;
         const label = ocLink.getAttribute('aria-label') || '';
-        // Must start with "Organized Crime:" and contain a role (i.e. not just a generic "no crime" message)
         return label.startsWith('Organized Crime:') && label.includes(' in ');
-    }
-
-    // Check if slot meets threshold for its level
-    function meetsThreshold(level, successRate) {
-        if (level >= 7) {
-            return successRate >= THRESHOLD_LEVEL_7_PLUS;
-        } else if (level >= 2) {
-            return successRate >= THRESHOLD_LEVEL_2_6;
-        } else {
-            // Level 1 - always OK as fallback
-            return true;
-        }
     }
 
     // Find all joinable slots and analyze them
@@ -167,25 +199,22 @@
 
             const level = getCrimeLevel(slot);
             const successRate = getSuccessRate(slot);
-            const crimeName = getCrimeName(slot);
-            const roleName = getRoleName(slot);
-            const crimeCard = getCrimeCard(slot);
-
             if (level === null || successRate === null) return;
 
-            const filledSlots = getFilledSlotCount(crimeCard);
-            const timeRemaining = getTimeRemaining(crimeCard);
+            const crimeCard = getCrimeCard(slot);
+            const threshold = getThreshold(level, crimeCard, slot);
 
             joinableSlots.push({
                 element: slot,
-                crimeCard: crimeCard,
-                level: level,
-                successRate: successRate,
-                crimeName: crimeName,
-                roleName: roleName,
-                filledSlots: filledSlots,
-                timeRemaining: timeRemaining,
-                meetsThreshold: meetsThreshold(level, successRate)
+                crimeCard,
+                level,
+                successRate,
+                threshold,
+                crimeName: getCrimeName(crimeCard) || 'Unknown',
+                roleName: getRoleName(slot),
+                filledSlots: getFilledSlotCount(crimeCard),
+                timeRemaining: getTimeRemaining(crimeCard),
+                meetsThreshold: threshold === 0 || successRate >= threshold,
             });
         });
 
@@ -194,74 +223,34 @@
 
     const MAX_RECOMMENDATIONS = 3;
 
-    // Find recommended OCs - returns { primary, secondary[] }
+    // Find recommended OCs — returns { primary, secondary[] }
     function findRecommendedOCs(slots) {
         if (slots.length === 0) return { primary: null, secondary: [] };
 
-        let results = [];
+        // Qualifying slots are those meeting their configured threshold
+        let qualifying = slots.filter(s => s.meetsThreshold);
 
-        // Check if user qualifies for Level 7+
-        // They need 50%+ in a Level 7+ slot AND 70%+ on ANY level 2-6 slot
-        const level7PlusSlots = slots.filter(s => s.level >= 7 && s.successRate >= THRESHOLD_LEVEL_7_PLUS);
-        const anyLevel2to6Meet70 = slots.some(s => s.level >= 2 && s.level <= 6 && s.successRate >= THRESHOLD_LEVEL_2_6);
-
-        if (level7PlusSlots.length > 0 && anyLevel2to6Meet70) {
-            // Sort: prefer 60%+ first, then level desc, then if close enough prefer urgency, then success rate
-            level7PlusSlots.sort((a, b) => {
-                const aPreferred = a.successRate >= PREFERRED_LEVEL_7_PLUS ? 1 : 0;
-                const bPreferred = b.successRate >= PREFERRED_LEVEL_7_PLUS ? 1 : 0;
-                if (bPreferred !== aPreferred) return bPreferred - aPreferred;
-                if (b.level !== a.level) return b.level - a.level;
-                const closeEnough = Math.abs(a.successRate - b.successRate) <= CLOSE_ENOUGH_PCT;
-                if (closeEnough) {
-                    if (a.timeRemaining !== b.timeRemaining) return a.timeRemaining - b.timeRemaining;
-                    if (b.filledSlots !== a.filledSlots) return b.filledSlots - a.filledSlots;
-                }
-                return b.successRate - a.successRate;
-            });
-            results = level7PlusSlots;
+        // Fallback: level 1 slots (threshold 0 means always OK, but be explicit)
+        if (qualifying.length === 0) {
+            qualifying = slots.filter(s => s.level === 1);
         }
 
-        // Fall back to qualifying Level 2-6 slots (70%+) if no level 7+ found
-        if (results.length === 0) {
-            const qualifyingSlots = slots.filter(s =>
-                s.level >= 2 && s.level <= 6 && s.successRate >= THRESHOLD_LEVEL_2_6
-            );
-            if (qualifyingSlots.length > 0) {
-                qualifyingSlots.sort((a, b) => {
-                    if (b.level !== a.level) return b.level - a.level;
-                    const closeEnough = Math.abs(a.successRate - b.successRate) <= CLOSE_ENOUGH_PCT;
-                    if (closeEnough) {
-                        if (a.timeRemaining !== b.timeRemaining) return a.timeRemaining - b.timeRemaining;
-                        if (b.filledSlots !== a.filledSlots) return b.filledSlots - a.filledSlots;
-                    }
-                    return b.successRate - a.successRate;
-                });
-                results = qualifyingSlots;
+        if (qualifying.length === 0) return { primary: null, secondary: [] };
+
+        // Sort: level desc, then if rates are close prefer urgency + filled slots, then success rate
+        qualifying.sort((a, b) => {
+            if (b.level !== a.level) return b.level - a.level;
+            const closeEnough = Math.abs(a.successRate - b.successRate) <= CLOSE_ENOUGH_PCT;
+            if (closeEnough) {
+                if (a.timeRemaining !== b.timeRemaining) return a.timeRemaining - b.timeRemaining;
+                if (b.filledSlots !== a.filledSlots) return b.filledSlots - a.filledSlots;
             }
-        }
-
-        // Fallback: Level 1 slots
-        if (results.length === 0) {
-            const level1Slots = slots.filter(s => s.level === 1);
-            if (level1Slots.length > 0) {
-                level1Slots.sort((a, b) => {
-                    const closeEnough = Math.abs(a.successRate - b.successRate) <= CLOSE_ENOUGH_PCT;
-                    if (closeEnough) {
-                        if (a.timeRemaining !== b.timeRemaining) return a.timeRemaining - b.timeRemaining;
-                        if (b.filledSlots !== a.filledSlots) return b.filledSlots - a.filledSlots;
-                    }
-                    return b.successRate - a.successRate;
-                });
-                results = level1Slots;
-            }
-        }
-
-        if (results.length === 0) return { primary: null, secondary: [] };
+            return b.successRate - a.successRate;
+        });
 
         // Only show slots at the same level as the best one, capped at MAX_RECOMMENDATIONS
-        const bestLevel = results[0].level;
-        results = results.filter(s => s.level === bestLevel).slice(0, MAX_RECOMMENDATIONS);
+        const bestLevel = qualifying[0].level;
+        const results = qualifying.filter(s => s.level === bestLevel).slice(0, MAX_RECOMMENDATIONS);
 
         return { primary: results[0], secondary: results.slice(1) };
     }
@@ -274,8 +263,6 @@
             el.style.removeProperty('box-shadow');
             el.dataset.ocRecommended = 'false';
         });
-
-        // Remove recommendation labels
         document.querySelectorAll('.oc-recommend-label').forEach(el => el.remove());
     }
 
@@ -294,7 +281,6 @@
         }
         element.dataset.ocRecommended = 'true';
 
-        // Add a label if not already present
         if (!element.querySelector('.oc-recommend-label')) {
             const label = document.createElement('div');
             label.className = 'oc-recommend-label';
@@ -317,8 +303,6 @@
                 white-space: nowrap;
             `;
             label.textContent = labelText;
-
-            // Make sure parent has relative positioning
             if (getComputedStyle(element).position === 'static') {
                 element.style.position = 'relative';
             }
@@ -329,35 +313,35 @@
     // Main function
     function updateRecommendations() {
         try {
-        clearRecommendations();
+            clearRecommendations();
 
-        if (isPlayerInOC()) {
-            debugLog('Player is already in an OC, skipping recommendations');
-            return;
-        }
+            if (isPlayerInOC()) {
+                debugLog('Player is already in an OC, skipping recommendations');
+                return;
+            }
 
-        const joinableSlots = analyzeJoinableSlots();
+            const joinableSlots = analyzeJoinableSlots();
 
-        if (joinableSlots.length === 0) {
-            debugLog('No joinable slots found');
-            return;
-        }
+            if (joinableSlots.length === 0) {
+                debugLog('No joinable slots found');
+                return;
+            }
 
-        debugLog('Found', joinableSlots.length, 'joinable slots');
+            debugLog('Found', joinableSlots.length, 'joinable slots');
 
-        const { primary, secondary } = findRecommendedOCs(joinableSlots);
+            const { primary, secondary } = findRecommendedOCs(joinableSlots);
 
-        if (primary) {
-            debugLog('Best OC: Level', primary.level, primary.crimeName, '-', primary.roleName, '(' + primary.successRate + '%, ' + primary.filledSlots + ' filled, ' + formatTime(primary.timeRemaining) + ' left)');
-            applyRecommendation(primary, true);
+            if (primary) {
+                debugLog('Best OC: Level', primary.level, primary.crimeName, '-', primary.roleName, '(' + primary.successRate + '%, threshold ' + primary.threshold + '%, ' + primary.filledSlots + ' filled, ' + formatTime(primary.timeRemaining) + ' left)');
+                applyRecommendation(primary, true);
 
-            secondary.forEach(slot => {
-                debugLog('Also recommended: Level', slot.level, slot.crimeName, '-', slot.roleName, '(' + slot.successRate + '%, ' + slot.filledSlots + ' filled, ' + formatTime(slot.timeRemaining) + ' left)');
-                applyRecommendation(slot, false);
-            });
-        } else {
-            debugLog('No suitable OC found');
-        }
+                secondary.forEach(slot => {
+                    debugLog('Also recommended: Level', slot.level, slot.crimeName, '-', slot.roleName, '(' + slot.successRate + '%, threshold ' + slot.threshold + '%, ' + slot.filledSlots + ' filled, ' + formatTime(slot.timeRemaining) + ' left)');
+                    applyRecommendation(slot, false);
+                });
+            } else {
+                debugLog('No suitable OC found');
+            }
         } catch (error) {
             debugLog('Error in updateRecommendations:', error);
             clearRecommendations();
@@ -383,10 +367,8 @@
 
         debugLog('Initialized');
 
-        // Initial update
         updateRecommendations();
 
-        // Set up MutationObserver with debouncing
         let debounceTimeout = null;
         const observer = new MutationObserver(() => {
             clearTimeout(debounceTimeout);
@@ -403,7 +385,6 @@
             });
         }
 
-        // Fallback: observe faction page container before body (reduces mutation overhead)
         if (!container) {
             const fallback = document.querySelector('#factions-page');
             observer.observe(fallback || document.body, {
@@ -412,7 +393,6 @@
             });
         }
 
-        // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
             clearTimeout(debounceTimeout);
             observer.disconnect();

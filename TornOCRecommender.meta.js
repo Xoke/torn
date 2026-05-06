@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      2.0
+// @version      2.2
 // @run-at       document-end
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
@@ -9,5 +9,5 @@
 // @homepageURL  https://github.com/Xoke/torn
 // @updateURL    https://raw.githubusercontent.com/Xoke/torn/main/TornOCRecommender.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Xoke/torn/main/TornOCRecommender.user.js
-// @grant        none
+// @grant        GM_getValue
 // ==/UserScript==
