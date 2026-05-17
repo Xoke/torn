@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Ranked War Retal Monitor
 // @namespace    https://xoke.org/
-// @version      1.7
+// @version      1.8
 // @description  Monitors faction attacks to identify retaliation opportunities during ranked wars
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -410,7 +410,7 @@
 
         GM_xmlhttpRequest({
             method: 'GET',
-            url: 'https://api.torn.com/user/?selections=basic&key=' + encodeURIComponent(apiKey),
+            url: 'https://api.torn.com/v2/user/faction?key=' + encodeURIComponent(apiKey),
             onload: function(response) {
                 try {
                     var data = JSON.parse(response.responseText);
@@ -421,8 +421,8 @@
                         return;
                     }
 
-                    if (data.faction && data.faction.faction_id) {
-                        factionId = data.faction.faction_id.toString();
+                    if (data.faction && data.faction.id) {
+                        factionId = data.faction.id.toString();
                         GM_setValue('tornRetalFactionId', factionId);
 
                         var factionInput = document.getElementById('retal-faction-id');
