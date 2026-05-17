@@ -57,6 +57,7 @@ Scripts by other authors that I've found useful.
 - [Crime Morale](https://greasyfork.org/en/scripts/515557-crime-morale) - Comprehensive tool for Crime 2.0 supporting scamming, pickpocketing, and burglary.
 - [OC 2.0 Helper](https://greasyfork.org/en/scripts/522974-torn-oc-2-0-helper) - Overview of OC 2.0 showing members not in crimes, members in each crime, and issues.
 - [OutcomeDB](https://greasyfork.org/en/scripts/489750-outcomedb) - Captures crime outcome, skill gain, and target data for analysis.
+- [Crime Profitability](https://greasyfork.org/en/scripts/538188-crime-profitability) - Shows crime profitability.
 
 ### Trading & Economy
 - [Torn Bazaar Filler](https://greasyfork.org/en/scripts/473470-torn-bazaar-filler) - Auto-fills bazaar prices with lowest market price minus a customizable amount.
