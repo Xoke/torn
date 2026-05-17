@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Ranked War Retal Monitor
 // @namespace    https://xoke.org/
-// @version      1.8
+// @version      1.9
 // @description  Monitors faction attacks to identify retaliation opportunities during ranked wars
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -389,11 +389,7 @@
         updateSettingsVisibility();
 
         // Update UI to reflect saved monitoring state
-        if (isMonitoring) {
-            var button = document.getElementById('retal-start-button');
-            button.textContent = 'Stop Monitoring';
-            button.classList.add('retal-stop-button');
-        }
+        syncButtonState();
 
         // Load existing retals from storage
         if (activeRetals.size > 0) {
@@ -509,19 +505,26 @@
         }
     }
 
+    function syncButtonState() {
+        var button = document.getElementById('retal-start-button');
+        if (!button) return;
+        if (isMonitoring) {
+            button.textContent = 'Stop Monitoring';
+            button.classList.add('retal-stop-button');
+        } else {
+            button.textContent = 'Start Monitoring';
+            button.classList.remove('retal-stop-button');
+        }
+    }
+
     // Start monitoring
     function startMonitoring() {
         isMonitoring = true;
         GM_setValue('tornRetalMonitoring', true);
         lastCheckedTimestamp = Math.floor(Date.now() / 1000);
-
-        var button = document.getElementById('retal-start-button');
-        button.textContent = 'Stop Monitoring';
-        button.classList.add('retal-stop-button');
-
+        syncButtonState();
         updateStatus('✅ Monitoring active - Checking every 10 seconds');
         debugLog('Started monitoring');
-
         checkForRetals(); // Initial check
         monitorInterval = setInterval(checkForRetals, API_DELAY);
     }
@@ -536,10 +539,7 @@
             monitorInterval = null;
         }
 
-        var button = document.getElementById('retal-start-button');
-        button.textContent = 'Start Monitoring';
-        button.classList.remove('retal-stop-button');
-
+        syncButtonState();
         updateStatus('⏸️ Monitoring stopped');
         debugLog('Stopped monitoring');
     }
