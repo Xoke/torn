@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Ranked War Retal Monitor
 // @namespace    https://xoke.org/
-// @version      1.11
+// @version      1.12
 // @description  Monitors faction attacks to identify retaliation opportunities during ranked wars
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -857,12 +857,16 @@
             startMonitoring();
         }
 
-        // Torn SPA can remove DOM nodes on navigation — watchdog re-creates panel and resyncs button
+        // Torn SPA can remove DOM nodes on navigation — watchdog re-creates panel and resyncs state
         setInterval(function() {
             if (!document.getElementById('retal-monitor-container')) {
                 createUI();
             } else {
                 syncButtonState();
+                var statusEl = document.getElementById('retal-status');
+                if (statusEl && statusEl.textContent === 'Not monitoring' && isMonitoring) {
+                    updateStatus('✅ Monitoring active - Checking every 10 seconds');
+                }
             }
         }, 500);
     }
