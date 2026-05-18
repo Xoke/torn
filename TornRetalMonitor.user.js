@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Ranked War Retal Monitor
 // @namespace    https://xoke.org/
-// @version      1.10
+// @version      1.11
 // @description  Monitors faction attacks to identify retaliation opportunities during ranked wars
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -390,6 +390,9 @@
 
         // Update UI to reflect saved monitoring state
         syncButtonState();
+        if (isMonitoring) {
+            updateStatus('✅ Monitoring active - Checking every 10 seconds');
+        }
 
         // Load existing retals from storage
         if (activeRetals.size > 0) {
