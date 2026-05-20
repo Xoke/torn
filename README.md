@@ -25,6 +25,9 @@ Monitors for retaliation opportunities and tracks players who have attacked fact
 ### [Torn Target Manager](https://raw.githubusercontent.com/Xoke/torn/main/TornTargetManager.user.js)
 Comprehensive target management tool for tracking and organizing attack targets.
 
+### [Torn List Exporter](https://raw.githubusercontent.com/Xoke/torn/main/TornListExporter.user.js)
+Exports your target or enemy list to JSON for import into Target Manager. On the list page, injects a fixed button that scrapes all visible entries (Torn ID, name, note) and downloads them as a JSON file.
+
 ### [Torn Xanax Reminder](https://raw.githubusercontent.com/Xoke/torn/main/TornXanaxReminder.user.js)
 Reminds you to take your Xanax when you have no drug cooldown. Shows a small clickable banner that takes you to your items page. Amended from [Don't forget your Xanax](https://greasyfork.org/en/scripts/490129-don-t-forget-your-xanax) by Shade — bar is now smaller and clickable, and removed embedded analytics script.
 
