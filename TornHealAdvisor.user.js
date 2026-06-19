@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Heal Advisor
 // @namespace    https://xoke.org/
-// @version      2.6
+// @version      2.7
 // @description  Recommends the most efficient healing item based on your remaining hospital time
 // @author       Xoke
 // @match        https://www.torn.com/
@@ -324,7 +324,11 @@
     function startHighlightObserver(rec) {
         if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
         const root = document.querySelector('#mainContainer') || document.body;
-        highlightObserver = new MutationObserver(() => highlightItems(rec));
+        let debounceTimer = null;
+        highlightObserver = new MutationObserver(() => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => highlightItems(rec), 300);
+        });
         highlightObserver.observe(root, { childList: true, subtree: true });
         setTimeout(() => {
             if (highlightObserver) { highlightObserver.disconnect(); highlightObserver = null; }
@@ -339,16 +343,20 @@
         detectHospitalMinutes(function (hospMin) {
             if (!hospMin || hospMin <= 0) {
                 if (!retryObserver) {
+                    let debounceTimer = null;
                     retryObserver = new MutationObserver(() => {
-                        const stamp = window.topBannerInitData &&
-                                      window.topBannerInitData.user &&
-                                      window.topBannerInitData.user.data &&
-                                      window.topBannerInitData.user.data.hospitalStamp;
-                        if (stamp || document.querySelector('[aria-label^="Hospital:"]')) {
-                            retryObserver.disconnect();
-                            retryObserver = null;
-                            run();
-                        }
+                        clearTimeout(debounceTimer);
+                        debounceTimer = setTimeout(() => {
+                            const stamp = window.topBannerInitData &&
+                                          window.topBannerInitData.user &&
+                                          window.topBannerInitData.user.data &&
+                                          window.topBannerInitData.user.data.hospitalStamp;
+                            if (stamp || document.querySelector('[aria-label^="Hospital:"]')) {
+                                retryObserver.disconnect();
+                                retryObserver = null;
+                                run();
+                            }
+                        }, 300);
                     });
                     retryObserver.observe(document.body, { childList: true, subtree: true });
                     setTimeout(() => {

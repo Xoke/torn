@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Bank Rounder
 // @namespace    https://xoke.org/
-// @version      1.4
+// @version      1.5
 // @description  Adds a button to auto-fill deposit amount to the highest achievable $5M multiple
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
@@ -130,10 +130,14 @@
             addRoundButton();
 
             if (observer) observer.disconnect();
+            let debounceTimer = null;
             observer = new MutationObserver(function () {
-                if (isArmouryTab() && !document.querySelector('.bank-rounder-btn')) {
-                    addRoundButton();
-                }
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(function () {
+                    if (isArmouryTab() && !document.querySelector('.bank-rounder-btn')) {
+                        addRoundButton();
+                    }
+                }, 300);
             });
             observer.observe(document.body, { childList: true, subtree: true });
         }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      4.5
+// @version      4.6
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
@@ -59,9 +59,26 @@
         try { remoteConfig = JSON.parse(cached); } catch (e) {}
     }
 
+    // Only fetch over HTTPS. The config URL is user-supplied and this script
+    // declares @connect * to allow it, so reject anything that isn't a plain
+    // https:// URL before handing it to GM_xmlhttpRequest.
+    function isValidConfigUrl(url) {
+        try {
+            return new URL(url).protocol === 'https:';
+        } catch (e) {
+            return false;
+        }
+    }
+
     function loadRemoteConfig(forceRefresh) {
         const configUrl = GM_getValue(REMOTE_CONFIG_URL_KEY, '');
         if (!configUrl) return;
+        if (!isValidConfigUrl(configUrl)) {
+            GM_setValue(REMOTE_CONFIG_STATUS_KEY, 'error');
+            loadCachedRemoteConfig();
+            updateRemoteConfigStatus();
+            return;
+        }
 
         if (!forceRefresh) {
             const ts = GM_getValue(REMOTE_CONFIG_TS_KEY, 0);
@@ -78,6 +95,10 @@
             onload: function(response) {
                 try {
                     const parsed = JSON.parse(response.responseText);
+                    // Must be a plain object map of crimeName -> { position: number }
+                    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                        throw new Error('Config is not an object');
+                    }
                     remoteConfig = parsed;
                     GM_setValue(REMOTE_CONFIG_KEY, response.responseText);
                     GM_setValue(REMOTE_CONFIG_TS_KEY, Date.now());
@@ -507,8 +528,12 @@
         document.getElementById('oc-config-load-now').addEventListener('click', () => {
             const urlInput = document.getElementById('oc-config-url-input');
             const url = urlInput.value.trim();
-            GM_setValue(REMOTE_CONFIG_URL_KEY, url);
             const statusEl = document.getElementById('oc-remote-config-status');
+            if (url && !isValidConfigUrl(url)) {
+                if (statusEl) statusEl.textContent = 'Invalid URL (must be https://)';
+                return;
+            }
+            GM_setValue(REMOTE_CONFIG_URL_KEY, url);
             if (statusEl) statusEl.textContent = 'Loading...';
             loadRemoteConfig(true);
         });

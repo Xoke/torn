@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Property Watcher
 // @namespace    https://xoke.org/
-// @version      1.2
+// @version      1.3
 // @description  Alerts when a cheap Private Island appears on the Torn property market
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -231,7 +231,7 @@
     function checkMarket() {
         GM_xmlhttpRequest({
             method: 'GET',
-            url: 'https://api.torn.com/v2/market/' + PROPERTY_TYPE_ID + '/properties?key=' + apiKey,
+            url: 'https://api.torn.com/v2/market/' + PROPERTY_TYPE_ID + '/properties?key=' + encodeURIComponent(apiKey),
             onload: function (response) {
                 let data;
                 try {

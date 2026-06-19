@@ -84,6 +84,10 @@ Scripts by other authors that I've found useful.
 2. Click on any script link above
 3. Click "Install" when prompted
 
+## API keys
+
+Several scripts (Target Manager, Retal Monitor, Ranked War Target Finder, Property Watcher) need a Torn API key. Keys are stored locally in your userscript manager's storage (`GM_setValue`) in **plain text** — they are never sent anywhere except `api.torn.com` over HTTPS. Because the storage is unencrypted, generate a **Limited Access** (minimal) key rather than a Full Access one; these scripts only read basic user/faction, profile, and attack data.
+
 ## Dependencies
 
 Some scripts require [FF Scouter](https://www.torn.com/forums.php#/p=threads&t=16290158) to be installed for battle stat estimates.
