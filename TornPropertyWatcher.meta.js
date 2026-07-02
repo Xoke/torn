@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Property Watcher
 // @namespace    https://xoke.org/
-// @version      1.3
+// @version      1.4
 // @description  Alerts when a cheap Private Island appears on the Torn property market
 // @author       Xoke
 // @match        https://www.torn.com/*

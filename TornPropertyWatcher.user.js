@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Property Watcher
 // @namespace    https://xoke.org/
-// @version      1.3
+// @version      1.4
 // @description  Alerts when a cheap Private Island appears on the Torn property market
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -28,6 +28,7 @@
     const POLL_INTERVAL = 10000;
     const PROPERTY_TYPE_ID = 13; // Private Island
     const API_KEY_STORAGE = 'tornPropertyWatcherApiKey';
+    const DISMISSED_STORAGE = 'tornPropertyWatcherDismissed';
     const MARKET_URL = 'https://www.torn.com/properties.php?step=sellingmarket#/property=13';
 
     function debugLog(...args) {
@@ -39,7 +40,41 @@
     let bannerEl = null;
     let pollTimer = null;
     let audioCtx = null;
-    const dismissedIds = new Set();
+    // Persisted so a dismissed listing stays dismissed across page loads
+    const dismissedIds = new Set(GM_getValue(DISMISSED_STORAGE, []));
+
+    function saveDismissed() {
+        GM_setValue(DISMISSED_STORAGE, Array.from(dismissedIds));
+    }
+
+    // Cross-tab leader election via localStorage so only one torn.com tab polls
+    // the API. The leader refreshes its heartbeat every poll; a stale heartbeat
+    // lets another tab take over.
+    const LEADER_KEY = 'tornPropertyWatcherLeader';
+    const LEADER_STALE_MS = 25000; // > 2 missed polls
+    const TAB_ID = Date.now() + '-' + Math.random().toString(36).slice(2);
+
+    function isLeaderTab() {
+        try {
+            const now = Date.now();
+            let leader = null;
+            try { leader = JSON.parse(localStorage.getItem(LEADER_KEY)); } catch (e) {}
+            if (!leader || leader.id === TAB_ID || (now - leader.ts) > LEADER_STALE_MS) {
+                localStorage.setItem(LEADER_KEY, JSON.stringify({ id: TAB_ID, ts: now }));
+                return true;
+            }
+            return false;
+        } catch (e) {
+            return true; // localStorage unavailable — fall back to polling
+        }
+    }
+
+    window.addEventListener('beforeunload', function () {
+        try {
+            const leader = JSON.parse(localStorage.getItem(LEADER_KEY));
+            if (leader && leader.id === TAB_ID) localStorage.removeItem(LEADER_KEY);
+        } catch (e) {}
+    });
 
     GM_addStyle(`
         #torn-pw-banner {
@@ -149,7 +184,7 @@
 
         const input = document.createElement('input');
         input.id = 'torn-pw-key-input';
-        input.type = 'text';
+        input.type = 'password';
         input.placeholder = 'Torn API key (16 chars)';
         input.maxLength = 16;
 
@@ -190,7 +225,10 @@
         dismiss.textContent = '\u00d7';
         dismiss.title = 'Dismiss';
         dismiss.addEventListener('click', function () {
-            if (lastAlertedId !== null) dismissedIds.add(lastAlertedId);
+            if (lastAlertedId !== null) {
+                dismissedIds.add(lastAlertedId);
+                saveDismissed();
+            }
             hideBanner();
         });
 
@@ -229,6 +267,9 @@
     }
 
     function checkMarket() {
+        // Only one torn.com tab should poll the API
+        if (!isLeaderTab()) return;
+
         GM_xmlhttpRequest({
             method: 'GET',
             url: 'https://api.torn.com/v2/market/' + PROPERTY_TYPE_ID + '/properties?key=' + encodeURIComponent(apiKey),
@@ -247,8 +288,23 @@
                 }
 
                 const listings = (data.properties && data.properties.listings) || [];
+
+                // Prune dismissed ids for listings that have left the market,
+                // so the set doesn't grow forever
+                const listingIds = new Set(listings.map(function (p) { return p.id; }));
+                let pruned = false;
+                dismissedIds.forEach(function (id) {
+                    if (!listingIds.has(id)) {
+                        dismissedIds.delete(id);
+                        pruned = true;
+                    }
+                });
+                if (pruned) saveDismissed();
+
+                // Exclude dismissed listings up front so dismissing the cheapest
+                // doesn't suppress alerts for other qualifying listings
                 const cheap = listings
-                    .filter(function (p) { return p.happy === 4225 && p.cost < PRICE_THRESHOLD; })
+                    .filter(function (p) { return p.happy === 4225 && p.cost < PRICE_THRESHOLD && !dismissedIds.has(p.id); })
                     .sort(function (a, b) { return a.cost - b.cost; });
 
                 if (cheap.length === 0) {
@@ -257,7 +313,7 @@
                 }
 
                 const best = cheap[0];
-                if (best.id === lastAlertedId || dismissedIds.has(best.id)) return;
+                if (best.id === lastAlertedId) return;
 
                 lastAlertedId = best.id;
                 debugLog('Found cheap PI:', best.id, best.cost);

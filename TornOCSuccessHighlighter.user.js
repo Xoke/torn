@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      4.6
+// @version      4.7
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
@@ -12,7 +12,8 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
-// @connect      *  // user-configurable remote config URL may point to any domain
+// The remote config URL is user-configurable and may point to any https:// domain
+// @connect      *
 // ==/UserScript==
 
 (function() {
@@ -51,12 +52,24 @@
 
     function saveThresholds() {
         GM_setValue('oc_thresholds', JSON.stringify(thresholds));
+        syncSharedConfig();
     }
 
     function loadCachedRemoteConfig() {
         const cached = GM_getValue(REMOTE_CONFIG_KEY, null);
         if (!cached) return;
         try { remoteConfig = JSON.parse(cached); } catch (e) {}
+    }
+
+    // GM_* storage is namespaced per script, so TornOCRecommender can't read our
+    // GM values. Mirror the effective config to localStorage (shared across all
+    // scripts on torn.com) whenever it changes.
+    function syncSharedConfig() {
+        try {
+            localStorage.setItem('oc_thresholds', JSON.stringify(thresholds));
+            localStorage.setItem('oc_remote_config', JSON.stringify(remoteConfig));
+            localStorage.setItem('oc_use_remote_config', JSON.stringify(GM_getValue(REMOTE_CONFIG_USE_KEY, true) === true));
+        } catch (e) {}
     }
 
     // Only fetch over HTTPS. The config URL is user-supplied and this script
@@ -103,6 +116,7 @@
                     GM_setValue(REMOTE_CONFIG_KEY, response.responseText);
                     GM_setValue(REMOTE_CONFIG_TS_KEY, Date.now());
                     GM_setValue(REMOTE_CONFIG_STATUS_KEY, 'ok');
+                    syncSharedConfig();
                 } catch (e) {
                     GM_setValue(REMOTE_CONFIG_STATUS_KEY, 'error');
                     loadCachedRemoteConfig();
@@ -140,6 +154,7 @@
 
     loadThresholds();
     loadCachedRemoteConfig();
+    syncSharedConfig();
 
     // Low success rate styling (red)
     const HIGHLIGHT_OUTLINE = '2px solid #ffff00';
@@ -513,6 +528,7 @@
             if (urlInput) GM_setValue(REMOTE_CONFIG_URL_KEY, urlInput.value.trim());
             const cb = document.getElementById('oc-use-remote-cb');
             if (cb) GM_setValue(REMOTE_CONFIG_USE_KEY, cb.checked);
+            syncSharedConfig();
             modal.classList.remove('open');
             runAllChecks();
         });

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      4.6
+// @version      4.7
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
@@ -12,5 +12,6 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
-// @connect      *  // user-configurable remote config URL may point to any domain
+// The remote config URL is user-configurable and may point to any https:// domain
+// @connect      *
 // ==/UserScript==

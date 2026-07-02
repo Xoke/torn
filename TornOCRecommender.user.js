@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Recommender
 // @namespace    https://xoke.org/
-// @version      2.3
+// @version      2.4
 // @run-at       document-end
 // @description  Recommends the best OC to join based on your success rates
 // @author       Xoke
@@ -21,13 +21,20 @@
         if (DEBUG) console.log('[OC Recommender]', ...args);
     }
 
-    // Shared threshold config — same keys as TornOCSuccessHighlighter (read-only here)
+    // Shared threshold config, written by TornOCSuccessHighlighter. GM_* storage is
+    // namespaced per script, so the Highlighter mirrors its config to localStorage
+    // (shared across all scripts on torn.com) and we read it from there.
     const DEFAULT_THRESHOLDS = { 1: 0, 2: 70, 3: 70, 4: 70, 5: 70, 6: 70, 7: 60, 8: 60, 9: 60, 10: 60 };
     let thresholds = Object.assign({}, DEFAULT_THRESHOLDS);
     let remoteConfig = {};
+    let useRemoteConfig = true;
+
+    function readSharedValue(key) {
+        try { return localStorage.getItem(key); } catch (e) { return null; }
+    }
 
     function loadThresholds() {
-        const saved = GM_getValue('oc_thresholds', null);
+        const saved = readSharedValue('oc_thresholds');
         if (!saved) return;
         try {
             const parsed = JSON.parse(saved);
@@ -38,13 +45,20 @@
     }
 
     function loadCachedRemoteConfig() {
-        const cached = GM_getValue('oc_remote_config', null);
+        const cached = readSharedValue('oc_remote_config');
         if (!cached) return;
         try { remoteConfig = JSON.parse(cached); } catch (e) {}
     }
 
+    function loadUseRemoteConfig() {
+        const saved = readSharedValue('oc_use_remote_config');
+        if (saved === null) return;
+        try { useRemoteConfig = JSON.parse(saved) === true; } catch (e) {}
+    }
+
     loadThresholds();
     loadCachedRemoteConfig();
+    loadUseRemoteConfig();
 
     const CLOSE_ENOUGH_PCT = 5;
 
@@ -111,7 +125,7 @@
     // Resolve threshold using same fallback chain as TornOCSuccessHighlighter:
     // 1. remoteConfig[crimeName][positionName]  2. thresholds[level]
     function getThreshold(level, crimeCard, slotElement) {
-        if (GM_getValue('oc_use_remote_config', true)) {
+        if (useRemoteConfig) {
             const crimeName = getCrimeName(crimeCard);
             const positionName = getPositionName(slotElement);
             if (crimeName && positionName && remoteConfig[crimeName]) {

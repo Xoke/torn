@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Ranked War Target Finder
 // @namespace    https://xoke.org/
-// @version      8.4
+// @version      8.5
 // @description  Find optimal targets for ranked wars with FF integration and chain monitoring
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -12,6 +12,8 @@
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_xmlhttpRequest
+// @connect      api.torn.com
 // ==/UserScript==
 
 (function() {
@@ -157,33 +159,42 @@
         return state;
     }
 
-    // Helper function for safe fetch with error handling and timeout
+    // Helper function for safe API fetch with error handling and timeout.
+    // Uses GM_xmlhttpRequest (not page-context fetch) so page scripts can't
+    // intercept the API key.
     function safeFetch(url) {
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function() {
-            controller.abort();
-        }, FETCH_TIMEOUT);
-
-        return fetch(url, { signal: controller.signal })
-            .then(function(response) {
-                if (!response.ok) {
-                    throw new Error('HTTP ' + response.status + ': ' + response.statusText);
-                }
-                return response.json();
-            })
-            .catch(function(error) {
-                if (error.name === 'AbortError') {
+        return new Promise(function(resolve, reject) {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: url,
+                timeout: FETCH_TIMEOUT,
+                onload: function(response) {
+                    if (response.status < 200 || response.status >= 300) {
+                        debugError('HTTP error:', response.status);
+                        updateStatus('❌ Error: HTTP ' + response.status, 'error');
+                        reject(new Error('HTTP ' + response.status));
+                        return;
+                    }
+                    try {
+                        resolve(JSON.parse(response.responseText));
+                    } catch (e) {
+                        debugError('JSON parse error:', e);
+                        updateStatus('❌ Error: invalid API response', 'error');
+                        reject(new Error('Invalid JSON response'));
+                    }
+                },
+                onerror: function() {
+                    debugError('Network error');
+                    updateStatus('❌ Network error', 'error');
+                    reject(new Error('Network error'));
+                },
+                ontimeout: function() {
                     debugError('Request timeout after', FETCH_TIMEOUT / 1000, 'seconds');
                     updateStatus('❌ Request timeout', 'error');
-                    throw new Error('Request timeout');
+                    reject(new Error('Request timeout'));
                 }
-                debugError('Fetch error:', error);
-                updateStatus('❌ Error: ' + error.message, 'error');
-                throw error;
-            })
-            .finally(function() {
-                clearTimeout(timeoutId); // Always clear timeout
             });
+        });
     }
 
     // Helper function to get cached targets
@@ -425,7 +436,11 @@
 
         debugLog('Scraped', targets.length, 'targets from faction page');
         saveTargets(targets);
-        GM_setValue('scrapedFactionId', factionId);
+        // Only persist a numeric faction ID — the URL fallback can yield a step
+        // name (e.g. "your"), which would poison later API refresh calls
+        if (validateFactionId(factionId)) {
+            GM_setValue('scrapedFactionId', factionId);
+        }
 
         // Mark targets as loaded to prevent button from reappearing
         targetsLoaded = true;
@@ -461,13 +476,13 @@
                 '</div>' +
                 '<div class="control-group">' +
                     '<label><input type="checkbox" id="enable-ff-filter" ' + (GM_getValue('enableFFFilter', false) ? 'checked' : '') + '> Filter Fair Fight:</label>' +
-                    '<label>Min <input type="number" id="min-ff" value="' + (GM_getValue('minFF', '1.0')) + '" step="0.1" style="width: 60px;"></label>' +
-                    '<label>Max <input type="number" id="max-ff" value="' + (GM_getValue('maxFF', '3.0')) + '" step="0.1" style="width: 60px;"></label>' +
+                    '<label>Min <input type="number" id="min-ff" value="' + escapeHtml(String(GM_getValue('minFF', '1.0'))) + '" step="0.1" style="width: 60px;"></label>' +
+                    '<label>Max <input type="number" id="max-ff" value="' + escapeHtml(String(GM_getValue('maxFF', '3.0'))) + '" step="0.1" style="width: 60px;"></label>' +
                 '</div>' +
                 '<div class="control-group">' +
                     '<label><input type="checkbox" id="enable-stats-filter" ' + (GM_getValue('enableStatsFilter', false) ? 'checked' : '') + '> Filter Battle Stats:</label>' +
-                    '<label>Min <input type="text" id="min-stats" placeholder="e.g. 1m" value="' + (GM_getValue('minStats', '')) + '" style="width: 70px;"></label>' +
-                    '<label>Max <input type="text" id="max-stats" placeholder="e.g. 10m" value="' + (GM_getValue('maxStats', '')) + '" style="width: 70px;"></label>' +
+                    '<label>Min <input type="text" id="min-stats" placeholder="e.g. 1m" value="' + escapeHtml(String(GM_getValue('minStats', ''))) + '" style="width: 70px;"></label>' +
+                    '<label>Max <input type="text" id="max-stats" placeholder="e.g. 10m" value="' + escapeHtml(String(GM_getValue('maxStats', ''))) + '" style="width: 70px;"></label>' +
                     '<label style="margin-left: 20px;"><input type="checkbox" id="auto-refresh" checked> Auto-refresh (5s)</label>' +
                     '<button id="toggle-advanced" class="torn-btn" style="margin-left: 20px;">⚙️ Advanced Settings</button>' +
                 '</div>' +
@@ -1230,13 +1245,23 @@
         disconnectFactionObserver();
     });
 
-    // Pause auto-refresh when page is hidden to save API calls
+    // Pause auto-refresh when page is hidden to save API calls, resume on return
+    var pausedByVisibility = false;
     document.addEventListener('visibilitychange', function() {
         if (document.hidden && refreshInterval) {
             debugLog('Page hidden, pausing auto-refresh');
             stopAutoRefresh();
+            pausedByVisibility = true;
             var autoRefreshEl = document.getElementById('auto-refresh');
             if (autoRefreshEl) autoRefreshEl.checked = false;
+        } else if (!document.hidden && pausedByVisibility) {
+            pausedByVisibility = false;
+            var resumeEl = document.getElementById('auto-refresh');
+            if (resumeEl) {
+                debugLog('Page visible again, resuming auto-refresh');
+                resumeEl.checked = true;
+                startAutoRefresh();
+            }
         }
     });
 

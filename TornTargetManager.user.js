@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Target Manager
 // @namespace    https://xoke.org/
-// @version      4.2
+// @version      4.3
 // @description  Manages a priority queue of elimination targets with live status updates, smart sorting, and bulk import from enemies/targets lists
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -9,6 +9,8 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
+// @grant        GM_xmlhttpRequest
+// @connect      api.torn.com
 // @run-at       document-end
 // @homepageURL  https://github.com/Xoke/torn
 // @updateURL    https://raw.githubusercontent.com/Xoke/torn/main/TornTargetManager.meta.js
@@ -47,12 +49,16 @@
     let autoRefreshInterval = null;
     let targetsPageActive = false;
 
-    // Helper function to escape HTML
+    // Helper function to escape HTML — also escapes quotes so values are safe
+    // inside attribute contexts (the textContent/innerHTML trick does not)
     function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        if (text === null || text === undefined) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     // Validate user ID (must be numeric)
@@ -79,26 +85,29 @@
                                type === 'warning' ? '#ffaa00' : '#44ff44';
     }
 
-    // Helper function for safe fetch with timeout
+    // Helper function for safe API fetch with timeout. Uses GM_xmlhttpRequest
+    // (not page-context fetch) so page scripts can't intercept the API key.
     function safeFetch(url, timeout = 15000) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-        return fetch(url, { signal: controller.signal })
-            .then(response => {
-                clearTimeout(timeoutId);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                return response.json();
-            })
-            .catch(error => {
-                clearTimeout(timeoutId);
-                if (error.name === 'AbortError') {
-                    throw new Error('Request timeout');
-                }
-                throw error;
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: url,
+                timeout: timeout,
+                onload: (response) => {
+                    if (response.status < 200 || response.status >= 300) {
+                        reject(new Error(`HTTP ${response.status}`));
+                        return;
+                    }
+                    try {
+                        resolve(JSON.parse(response.responseText));
+                    } catch (e) {
+                        reject(new Error('Invalid JSON response'));
+                    }
+                },
+                onerror: () => reject(new Error('Network error')),
+                ontimeout: () => reject(new Error('Request timeout'))
             });
+        });
     }
 
     // Helper function to determine status state
@@ -156,7 +165,7 @@
     function setupStorageListener() {
         let lastTimestamp = GM_getValue(STORAGE_KEY + '_timestamp', '0');
 
-        // Check for changes every 2 seconds (GM_* storage has no cross-tab events, so we poll)
+        // Check for changes every 5 seconds (GM_* storage has no cross-tab events, so we poll)
         setInterval(() => {
             const currentTimestamp = GM_getValue(STORAGE_KEY + '_timestamp', '0');
             if (currentTimestamp !== lastTimestamp) {
@@ -180,7 +189,7 @@
                     displayTargetsTable();
                 }
             }
-        }, 2000);
+        }, 5000);
     }
 
     // Add "View Targets" button to sidebar
@@ -205,7 +214,12 @@
             viewButton.className = 'torn-btn tm-sidebar-btn';
             viewButton.style.cssText = 'width: 100%; padding: 10px; font-size: 14px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 5px; text-align: center; display: flex; align-items: center; justify-content: center;';
 
-            viewButton.addEventListener('click', targetsPageActive ? backToTorn : showTargetsPage);
+            // Single handler that checks state at click time, so we never need to
+            // swap listeners (swapping led to both handlers being attached)
+            viewButton.addEventListener('click', () => {
+                if (targetsPageActive) backToTorn();
+                else showTargetsPage();
+            });
             viewButton.addEventListener('mouseover', () => viewButton.style.background = '#229954');
             viewButton.addEventListener('mouseout', () => viewButton.style.background = '#27ae60');
 
@@ -442,8 +456,8 @@
         const url = window.location.href;
 
         // Check for enemies/targets pages: https://www.torn.com/page.php?sid=list&type=enemies
-        const isEnemiesPage = url.includes('sid=list&type=enemies') || url.includes('sid=list') && url.includes('type=enemies');
-        const isTargetsPage = url.includes('sid=list&type=targets') || url.includes('sid=list') && url.includes('type=targets');
+        const isEnemiesPage = url.includes('sid=list') && url.includes('type=enemies');
+        const isTargetsPage = url.includes('sid=list') && url.includes('type=targets');
 
         if (!isEnemiesPage && !isTargetsPage) {
             return;
@@ -664,14 +678,10 @@
     function showTargetsPage() {
         targetsPageActive = true;
 
-        // Update sidebar button text
+        // Update sidebar button text (its click handler checks targetsPageActive)
         const viewBtn = document.getElementById('view-targets-btn');
         if (viewBtn) {
             viewBtn.textContent = '← Back to Torn';
-            // Update click handler
-            const oldHandler = viewBtn.onclick;
-            viewBtn.onclick = null;
-            viewBtn.addEventListener('click', backToTorn);
         }
 
         const content = document.querySelector('.content-wrapper[role="main"]') ||
@@ -1126,13 +1136,13 @@
             const cooldownTime = onCooldown ? formatCooldown(target.cooldownUntil - Date.now()) : '';
 
             const rowClass = onCooldown ? 'tm-row-cooldown' : '';
-            rows += `<tr class="${rowClass}" data-status="${statusState}" data-cooldown="${onCooldown ? '1' : '0'}" data-ff="${ff}" data-user-id="${target.id}">
+            rows += `<tr class="${rowClass}" data-status="${escapeHtml(statusState)}" data-cooldown="${onCooldown ? '1' : '0'}" data-ff="${escapeHtml(String(ff))}" data-user-id="${escapeHtml(target.id)}">
                 <td class="delete-col">
                     <button class="remove-btn" data-action="remove" data-target-id="${escapeHtml(target.id)}" title="Remove target">✕</button>
                 </td>
-                <td><a href="/profiles.php?XID=${escapeHtml(target.id)}" target="_blank" class="target-name-link">${escapeHtml(target.name)}</a> [${target.id}]</td>
+                <td><a href="/profiles.php?XID=${escapeHtml(target.id)}" target="_blank" class="target-name-link">${escapeHtml(target.name)}</a> [${escapeHtml(target.id)}]</td>
                 <td>${escapeHtml(String(target.level))}</td>
-                <td class="status-${statusState}">${escapeHtml(statusDesc)}</td>
+                <td class="status-${escapeHtml(statusState)}">${escapeHtml(statusDesc)}</td>
                 <td>${lastActionRel}</td>
                 <td class="ff-score">${escapeHtml(String(ff))}</td>
                 <td>${escapeHtml(String(stats))}</td>

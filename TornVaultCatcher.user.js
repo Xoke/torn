@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Vault Catcher
 // @namespace    https://xoke.org/
-// @version      2.1
+// @version      2.2
 // @description  Warns when giving a faction member more money than their vault balance
 // @author       Xoke (based on VaultCatcher by Lazerpent [2112641])
 // @match        https://www.torn.com/factions.php*
@@ -234,34 +234,11 @@
         moneyGroup.appendChild(btn);
     }
 
-    function interceptSubmit() {
-        if (interceptActive) return;
-
-        const container = document.getElementById('option-give-to-user');
-        if (!container) return;
-
-        const submitBtn = container.querySelector('button[type="submit"].torn-btn');
-        if (!submitBtn) return;
-
-        // Mark as intercepted to avoid double-binding
+    // Bind the vault-balance check to a submit button (idempotent per button).
+    // React re-renders can replace the button, so this may be called repeatedly.
+    function bindSubmitIntercept(submitBtn) {
         if (submitBtn.dataset.vaultCatcher) return;
         submitBtn.dataset.vaultCatcher = 'true';
-        interceptActive = true;
-
-        addFillBalanceButton();
-
-        // Watch for React re-renders that destroy our button (e.g. user selection).
-        // Debounce so we wait for React to finish before trying to re-add.
-        var fillBtnTimer = null;
-        var btnObserver = new MutationObserver(function () {
-            if (!container.querySelector('.vault-catcher-fill-btn')) {
-                clearTimeout(fillBtnTimer);
-                fillBtnTimer = setTimeout(addFillBalanceButton, 300);
-            }
-        });
-        btnObserver.observe(container, { childList: true, subtree: true });
-
-        window.addEventListener('beforeunload', function () { btnObserver.disconnect(); });
 
         submitBtn.addEventListener('click', function (e) {
             if (submitBtn.dataset.vaultCatcherBypass) return;
@@ -304,6 +281,41 @@
                 }
             }
         }, true); // Capture phase to run before Torn's handlers
+    }
+
+    let observedContainer = null;
+
+    function interceptSubmit() {
+        const container = document.getElementById('option-give-to-user');
+        if (!container) return;
+
+        const submitBtn = container.querySelector('button[type="submit"].torn-btn');
+        if (!submitBtn) return;
+
+        bindSubmitIntercept(submitBtn);
+        interceptActive = true; // tells init()'s retry observer to stand down
+
+        // Don't stack duplicate observers on the same container across hashchanges
+        if (observedContainer === container) return;
+        observedContainer = container;
+
+        addFillBalanceButton();
+
+        // Watch for React re-renders that destroy our fill button or replace the
+        // submit button (losing our listener). Debounce so we wait for React to
+        // finish before re-adding/re-binding.
+        var rebindTimer = null;
+        var btnObserver = new MutationObserver(function () {
+            clearTimeout(rebindTimer);
+            rebindTimer = setTimeout(function () {
+                addFillBalanceButton();
+                const btn = container.querySelector('button[type="submit"].torn-btn');
+                if (btn) bindSubmitIntercept(btn);
+            }, 300);
+        });
+        btnObserver.observe(container, { childList: true, subtree: true });
+
+        window.addEventListener('beforeunload', function () { btnObserver.disconnect(); });
     }
 
     // Watch for the give-to-user tab to load

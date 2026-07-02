@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Ranked War Retal Monitor
 // @namespace    https://xoke.org/
-// @version      1.12
+// @version      1.13
 // @description  Monitors faction attacks to identify retaliation opportunities during ranked wars
 // @author       Xoke
 // @match        https://www.torn.com/*
@@ -47,6 +47,35 @@
 
     // Store active retal opportunities (attackerId -> retal object)
     const activeRetals = new Map(GM_getValue('tornActiveRetals', []));
+
+    // Cross-tab leader election via localStorage (shared across torn.com tabs) so
+    // only one tab polls the API. Leadership is a heartbeat: the leader rewrites
+    // its timestamp on every poll; if it goes stale, the next tab takes over.
+    const LEADER_KEY = 'tornRetalMonitorLeader';
+    const LEADER_STALE_MS = 25000; // > 2 missed polls
+    const TAB_ID = Date.now() + '-' + Math.random().toString(36).slice(2);
+
+    function isLeaderTab() {
+        try {
+            const now = Date.now();
+            let leader = null;
+            try { leader = JSON.parse(localStorage.getItem(LEADER_KEY)); } catch (e) {}
+            if (!leader || leader.id === TAB_ID || (now - leader.ts) > LEADER_STALE_MS) {
+                localStorage.setItem(LEADER_KEY, JSON.stringify({ id: TAB_ID, ts: now }));
+                return true;
+            }
+            return false;
+        } catch (e) {
+            return true; // localStorage unavailable — fall back to polling
+        }
+    }
+
+    window.addEventListener('beforeunload', function() {
+        try {
+            const leader = JSON.parse(localStorage.getItem(LEADER_KEY));
+            if (leader && leader.id === TAB_ID) localStorage.removeItem(LEADER_KEY);
+        } catch (e) {}
+    });
 
     // Styles
     GM_addStyle(`
@@ -524,7 +553,6 @@
     function startMonitoring() {
         isMonitoring = true;
         GM_setValue('tornRetalMonitoring', true);
-        lastCheckedTimestamp = Math.floor(Date.now() / 1000);
         syncButtonState();
         updateStatus('✅ Monitoring active - Checking every 10 seconds');
         debugLog('Started monitoring');
@@ -557,6 +585,12 @@
 
     // Check for retals via API
     function checkForRetals() {
+        // Only one torn.com tab should poll the API
+        if (!isLeaderTab()) {
+            updateStatus('✅ Monitoring active (another tab is polling)');
+            return;
+        }
+
         var now = Math.floor(Date.now() / 1000);
 
         updateStatus('🔍 Checking for attacks... (Last: ' + new Date().toLocaleTimeString() + ')');
@@ -868,7 +902,7 @@
                     updateStatus('✅ Monitoring active - Checking every 10 seconds');
                 }
             }
-        }, 500);
+        }, 2000);
     }
 
     // Wait for page load
