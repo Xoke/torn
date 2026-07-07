@@ -71,6 +71,7 @@ Scripts by other authors that I've found useful.
 ### Missions & Misc
 - [Torn Mission Reward Information](https://greasyfork.org/en/scripts/395668-torn-mission-reward-information) - Displays mission reward value per credit and compares mod offers.
 - [cryosis7's Torn Userscripts](https://github.com/cryosis7/torn_userscripts) - Collection of utility scripts for filtering, racing, and various game mechanics.
+- [BUSTR: Busting Reminder + PDA](https://greasyfork.org/en/scripts/480750-bustr-busting-reminder-pda) - Predicts how many jail busts you can make before the penalty jails you, with notifications and a difficulty score for inmates.
 
 ### Extensions
 - [Torn Tools](https://github.com/Mephiles/torntools_extension) - Comprehensive browser extension with a wide range of quality-of-life features across the game.
