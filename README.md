@@ -40,6 +40,9 @@ Adds a "5M" button to the bank deposit form. Clicking it auto-fills the deposit 
 ### [Torn Vault Catcher](https://raw.githubusercontent.com/Xoke/torn/main/TornVaultCatcher.user.js)
 Warns faction bankers when giving a member more money than their vault balance, helping prevent accidental overpayments from faction funds.
 
+### [Torn Shoplifting Store Alert](https://raw.githubusercontent.com/Xoke/torn/main/TornShopliftingAlert.user.js)
+Alerts when any shoplifting store (jewelry store, gun shop, clothing store, etc.) has all of its security — cameras, guard, checkpoint — disabled at once. Plays an audio chime and shows a clickable banner listing the open stores. A gear button on the crimes page (`sid=crimes`) opens a settings panel to enable/disable alerts per store — handy if you already have a merit like the Cluster Ring and don't need that one. Polls every 30 seconds. Requires an API key on first run. Generalizes [Torn Jewelry Store Cluster Ring Alert](https://greasyfork.org/en/scripts/553079-torn-jewelry-store-cluster-ring-alert) by swervelord (which only covered the jewelry store) to every shoplifting location.
+
 ## Other Useful Scripts
 
 Scripts by other authors that I've found useful.
@@ -88,7 +91,7 @@ Scripts by other authors that I've found useful.
 
 ## API keys
 
-Several scripts (Target Manager, Retal Monitor, Ranked War Target Finder, Property Watcher) need a Torn API key. Keys are stored locally in your userscript manager's storage (`GM_setValue`) in **plain text** — they are never sent anywhere except `api.torn.com` over HTTPS. Because the storage is unencrypted, generate a **Limited Access** (minimal) key rather than a Full Access one; these scripts only read basic user/faction, profile, and attack data.
+Several scripts (Target Manager, Retal Monitor, Ranked War Target Finder, Property Watcher, Shoplifting Store Alert) need a Torn API key. Keys are stored locally in your userscript manager's storage (`GM_setValue`) in **plain text** — they are never sent anywhere except `api.torn.com` over HTTPS. Because the storage is unencrypted, generate a **Limited Access** (minimal) key rather than a Full Access one; these scripts only read basic user/faction, profile, and attack data.
 
 ## Dependencies
 
