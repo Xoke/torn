@@ -81,6 +81,13 @@
     "Hacker": 60,
     "Techie": 60
   },
+  "Dish It Out": {
+    "Assassin": 70,
+    "Muscle": 60,
+    "Saboteur 1": 55,
+    "Saboteur 2": 55,
+    "Engineer": 60
+  },
   "Blast From The Past": {
     "Picklock 1": 60,
     "Hacker": 60,
@@ -117,10 +124,10 @@
     "Cleaner": 60
   },
   "Manifest Cruelty": {
-    "Hacker": 60,
-    "Interrogator": 60,
-    "Reviver": 65,
-    "Cat Burglar": 60
+    "Hacker": 160,
+    "Interrogator": 160,
+    "Reviver": 165,
+    "Cat Burglar": 160
   },
   "Ace in the Hole": {
     "Imitator": 60,
@@ -130,18 +137,18 @@
     "Driver": 60
   },
   "Gone Fission": {
-    "Hijacker": 65,
-    "Engineer": 60,
-    "Pickpocket": 60,
-    "Imitator": 65,
-    "Bomber": 60
+    "Hijacker": 165,
+    "Engineer": 160,
+    "Pickpocket": 160,
+    "Imitator": 165,
+    "Bomber": 160
   },
   "Crane Reaction": {
-    "Sniper": 65,
-    "Lookout": 60,
-    "Engineer": 60,
-    "Bomber": 60,
-    "Muscle 1": 60,
-    "Muscle 2": 60
+    "Sniper": 165,
+    "Lookout": 160,
+    "Engineer": 160,
+    "Bomber": 160,
+    "Muscle 1": 160,
+    "Muscle 2": 160
   }
 }
