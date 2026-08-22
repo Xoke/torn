@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      5.0
+// @version      5.1
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, missing items, and flying/traveling members holding up the OC, with a summary panel
 // @author       Xoke
@@ -491,7 +491,7 @@
             #oc-summary-panel {
                 display: flex;
                 flex-direction: column;
-                gap: 4px;
+                gap: 2px;
                 background: #1a1a2e;
                 border: 1px solid #334;
                 border-radius: 4px;
@@ -499,6 +499,8 @@
                 margin-bottom: 6px;
                 font-family: sans-serif;
                 font-size: 11px;
+                max-height: 260px;
+                overflow-y: auto;
             }
             .oc-summary-row {
                 color: #ccc;
@@ -513,6 +515,20 @@
             .oc-summary-row.oc-summary-low .oc-summary-label { color: #ffcc00; }
             .oc-summary-row.oc-summary-stalled .oc-summary-label { color: #ff8800; }
             .oc-summary-row.oc-summary-empty { color: #667; font-style: italic; }
+            .oc-summary-entry {
+                color: #ccc;
+                padding-left: 16px;
+                line-height: 1.5;
+            }
+            .oc-summary-name {
+                font-weight: bold;
+                text-decoration: none;
+                cursor: pointer;
+            }
+            .oc-summary-name:hover { text-decoration: underline; }
+            .oc-summary-entry.oc-summary-flying .oc-summary-name { color: #33ccff; }
+            .oc-summary-entry.oc-summary-missing .oc-summary-name { color: #dd66ff; }
+            .oc-summary-entry.oc-summary-low .oc-summary-name { color: #ffcc00; }
         `;
         document.head.appendChild(style);
     })();
@@ -595,6 +611,12 @@
         });
     }
 
+    // Get the "View Profile" link URL for a slot's assigned member
+    function getSlotProfileUrl(slotElement) {
+        const link = slotElement.querySelector('[class*="slotMenuItem___"]');
+        return link ? link.getAttribute('href') : null;
+    }
+
     // Gather current flying/missing-item/low-success/stalled slots into a summary
     function collectSummary() {
         const root = document.querySelector('#faction-crimes, .faction-crimes-wrap, #faction-crimes-root');
@@ -607,7 +629,7 @@
 
         root.querySelectorAll('[data-oc-id]').forEach(card => {
             if ((card.dataset.ocHighlighted || '') === 'stalled') {
-                stalled.push(getCrimeName(card) || 'Unknown crime');
+                stalled.push({ detail: getCrimeName(card) || 'Unknown crime' });
             }
         });
 
@@ -616,24 +638,53 @@
             const tag = slot.dataset.ocHighlighted || '';
             if (!tag) return;
 
-            const memberName = getSlotMemberName(slot) || '?';
+            const name = getSlotMemberName(slot) || '?';
+            const profileUrl = getSlotProfileUrl(slot);
             const position = getPositionName(slot) || 'Unknown role';
             const crimeName = getCrimeName(getOCCard(slot)) || 'Unknown crime';
 
             if (tag === 'flying') {
-                flying.push(`${memberName} (${position} - ${crimeName})`);
+                flying.push({ name, profileUrl, detail: `${position} - ${crimeName}` });
             } else if (tag === 'missingItem') {
                 const label = slot.querySelector('.oc-missing-label');
                 const match = label && label.textContent.match(/^⊘\s*(.+)$/);
                 const itemName = match ? match[1] : '?';
-                missing.push(`${memberName} (${position} - ${crimeName}): ${itemName}`);
+                missing.push({ name, profileUrl, detail: `${position} - ${crimeName}: ${itemName}` });
             } else if (tag === 'lowSuccess') {
                 const successRate = getSuccessRate(slot);
-                lowSuccess.push(`${memberName} (${position} - ${crimeName}): ${successRate}%`);
+                lowSuccess.push({ name, profileUrl, detail: `${position} - ${crimeName}: ${successRate}%` });
             }
         });
 
         return { flying, missing, lowSuccess, stalled };
+    }
+
+    // Build one summary row: an optional clickable member-name link, plus detail text
+    function buildSummaryEntryRow(type, entry) {
+        const rowEl = document.createElement('div');
+        rowEl.className = `oc-summary-entry oc-summary-${type}`;
+
+        if (entry.name) {
+            if (entry.profileUrl) {
+                const link = document.createElement('a');
+                link.className = 'oc-summary-name';
+                link.href = entry.profileUrl;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.textContent = entry.name;
+                rowEl.appendChild(link);
+            } else {
+                const span = document.createElement('span');
+                span.className = 'oc-summary-name';
+                span.textContent = entry.name;
+                rowEl.appendChild(span);
+            }
+            rowEl.appendChild(document.createTextNode(' — ' + entry.detail));
+        } else {
+            rowEl.appendChild(document.createTextNode(entry.detail));
+        }
+
+        return rowEl;
     }
 
     // Render the summary panel content from the latest collectSummary() result
@@ -643,15 +694,15 @@
         const summary = collectSummary();
         if (!summary) return;
 
-        const rows = [
-            { type: 'flying', label: `✈ Flying (${summary.flying.length})`, items: summary.flying },
-            { type: 'missing', label: `⊘ Missing item (${summary.missing.length})`, items: summary.missing },
-            { type: 'low', label: `⚠ Low success (${summary.lowSuccess.length})`, items: summary.lowSuccess },
-            { type: 'stalled', label: `⏸ Stalled (${summary.stalled.length})`, items: summary.stalled },
-        ].filter(row => row.items.length > 0);
+        const groups = [
+            { type: 'flying', label: `✈ Flying (${summary.flying.length})`, entries: summary.flying },
+            { type: 'missing', label: `⊘ Missing item (${summary.missing.length})`, entries: summary.missing },
+            { type: 'low', label: `⚠ Low success (${summary.lowSuccess.length})`, entries: summary.lowSuccess },
+            { type: 'stalled', label: `⏸ Stalled (${summary.stalled.length})`, entries: summary.stalled },
+        ].filter(group => group.entries.length > 0);
 
         panel.textContent = '';
-        if (rows.length === 0) {
+        if (groups.length === 0) {
             const row = document.createElement('div');
             row.className = 'oc-summary-row oc-summary-empty';
             row.textContent = 'No issues detected';
@@ -659,15 +710,18 @@
             return;
         }
 
-        rows.forEach(row => {
-            const rowEl = document.createElement('div');
-            rowEl.className = `oc-summary-row oc-summary-${row.type}`;
+        groups.forEach(group => {
+            const headerEl = document.createElement('div');
+            headerEl.className = `oc-summary-row oc-summary-${group.type}`;
             const labelEl = document.createElement('span');
             labelEl.className = 'oc-summary-label';
-            labelEl.textContent = row.label + ':';
-            rowEl.appendChild(labelEl);
-            rowEl.appendChild(document.createTextNode(row.items.join(', ')));
-            panel.appendChild(rowEl);
+            labelEl.textContent = group.label;
+            headerEl.appendChild(labelEl);
+            panel.appendChild(headerEl);
+
+            group.entries.forEach(entry => {
+                panel.appendChild(buildSummaryEntryRow(group.type, entry));
+            });
         });
     }
 
