@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      4.7
+// @version      4.8
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
 // @author       Xoke
@@ -35,6 +35,7 @@
     const REMOTE_CONFIG_URL_KEY = 'oc_config_url';
     const REMOTE_CONFIG_STATUS_KEY = 'oc_remote_config_status';
     const REMOTE_CONFIG_USE_KEY = 'oc_use_remote_config';
+    const DEFAULT_CONFIG_URL = 'https://raw.githubusercontent.com/Xoke/torn/refs/heads/main/TornOCSuccessHighlighter.config.json';
     const REMOTE_CONFIG_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
     let remoteConfig = {};
@@ -84,8 +85,7 @@
     }
 
     function loadRemoteConfig(forceRefresh) {
-        const configUrl = GM_getValue(REMOTE_CONFIG_URL_KEY, '');
-        if (!configUrl) return;
+        const configUrl = GM_getValue(REMOTE_CONFIG_URL_KEY, '') || DEFAULT_CONFIG_URL;
         if (!isValidConfigUrl(configUrl)) {
             GM_setValue(REMOTE_CONFIG_STATUS_KEY, 'error');
             loadCachedRemoteConfig();
@@ -136,11 +136,6 @@
     function updateRemoteConfigStatus() {
         const el = document.getElementById('oc-remote-config-status');
         if (!el) return;
-        const configUrl = GM_getValue(REMOTE_CONFIG_URL_KEY, '');
-        if (!configUrl) {
-            el.textContent = 'Not set';
-            return;
-        }
         const status = GM_getValue(REMOTE_CONFIG_STATUS_KEY, '');
         const ts = GM_getValue(REMOTE_CONFIG_TS_KEY, 0);
         if (status === 'error') {
@@ -497,7 +492,7 @@
             <div id="oc-remote-config-section">
                 <h4>Remote Config URL</h4>
                 <div id="oc-remote-config-row">
-                    <input id="oc-config-url-input" type="text" placeholder="https://raw.githubusercontent.com/...">
+                    <input id="oc-config-url-input" type="text" placeholder="${DEFAULT_CONFIG_URL}">
                     <button id="oc-config-load-now">Load Now</button>
                 </div>
                 <div id="oc-use-remote-row">
@@ -543,13 +538,13 @@
 
         document.getElementById('oc-config-load-now').addEventListener('click', () => {
             const urlInput = document.getElementById('oc-config-url-input');
-            const url = urlInput.value.trim();
+            const url = urlInput.value.trim() || DEFAULT_CONFIG_URL;
             const statusEl = document.getElementById('oc-remote-config-status');
-            if (url && !isValidConfigUrl(url)) {
+            if (!isValidConfigUrl(url)) {
                 if (statusEl) statusEl.textContent = 'Invalid URL (must be https://)';
                 return;
             }
-            GM_setValue(REMOTE_CONFIG_URL_KEY, url);
+            GM_setValue(REMOTE_CONFIG_URL_KEY, urlInput.value.trim());
             if (statusEl) statusEl.textContent = 'Loading...';
             loadRemoteConfig(true);
         });
