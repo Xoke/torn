@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      4.8
+// @version      4.9
 // @run-at       document-end
-// @description  Highlights low success OC participants, stalled OCs, and missing items (with item name label)
+// @description  Highlights low success OC participants, stalled OCs, missing items, and flying/traveling members holding up the OC
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
 // @homepageURL  https://github.com/Xoke/torn
@@ -163,6 +163,10 @@
     const MISSING_ITEM_OUTLINE = '2px solid #dd66ff';
     const MISSING_ITEM_BOX_SHADOW = '0 0 10px 3px rgba(170, 0, 255, 0.8)';
 
+    // Flying/traveling member styling (blue) - member is holding up the OC
+    const FLYING_OUTLINE = '2px solid #33ccff';
+    const FLYING_BOX_SHADOW = '0 0 10px 3px rgba(0, 153, 255, 0.8)';
+
     // OC2 style application (reapplied every cycle via setProperty)
 
     // Traverse up from el to find the OC crime card (data-oc-id ancestor)
@@ -272,6 +276,19 @@
         return !!slotElement.querySelector('[class*="slotIcon___"] div path[fill="#ff794c"]');
     }
 
+    // Check if a slot's assigned member is flying/traveling and holding up the OC.
+    // Same warning-orange fill as the missing-item icon, but the SVG is a direct
+    // child of slotIcon___ (no wrapper div) - see hasMissingItem above.
+    function hasFlyingMember(slotElement) {
+        return !!slotElement.querySelector('[class*="slotIcon___"] > svg > path[fill="#ff794c"]');
+    }
+
+    // Get the assigned member's name for a slot from their badge image
+    function getSlotMemberName(slotElement) {
+        const img = slotElement.querySelector('[class*="badgeContainer___"] img[alt]');
+        return img ? img.getAttribute('alt') : null;
+    }
+
     // Get the slotHeader button within a slot wrapper
     function getSlotHeader(slotElement) {
         return slotElement.querySelector('[class*="slotHeader___"]');
@@ -301,6 +318,9 @@
                 font-family: sans-serif;
                 letter-spacing: 0.3px;
                 box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+            }
+            .oc-flying-label {
+                background: #0099ff;
             }
         `;
         document.head.appendChild(style);
@@ -626,6 +646,22 @@
         document.querySelectorAll('.oc-missing-label').forEach(el => el.remove());
     }
 
+    // Add/remove the flying-member label above the slot header button (synchronous,
+    // unlike missing-item labels, since the member's name is already in the DOM)
+    function applyFlyingLabel(slotHeader, memberName) {
+        if (slotHeader.querySelector('.oc-flying-label')) return;
+        const label = document.createElement('div');
+        label.className = 'oc-missing-label oc-flying-label';
+        label.textContent = `✈ ${memberName || '?'}`;
+        slotHeader.style.position = 'relative';
+        slotHeader.appendChild(label);
+    }
+
+    function clearFlyingLabel(slotHeader) {
+        const label = slotHeader && slotHeader.querySelector('.oc-flying-label');
+        if (label) label.remove();
+    }
+
     // Async: find all missing-item slots, extract item name via tooltip, and label them
     let _labellingInProgress = false;
     async function labelMissingItems() {
@@ -726,6 +762,19 @@
             // Get crime level
             const level = getCrimeLevel(slot);
             if (level === null) return;
+
+            // Check for a flying/traveling member holding up the OC (any level, any slot with a player)
+            if (hasPlayer(slot) && hasFlyingMember(slot)) {
+                if (currentTag !== 'flying') {
+                    applyHighlight(slot, FLYING_OUTLINE, FLYING_BOX_SHADOW, 'flying');
+                    applyFlyingLabel(getSlotHeader(slot), getSlotMemberName(slot));
+                    debugLog('Flying member: Level', level, getSlotMemberName(slot));
+                }
+                return;
+            } else if (currentTag === 'flying') {
+                clearHighlight(slot);
+                clearFlyingLabel(getSlotHeader(slot));
+            }
 
             // Check for missing items (any level, any slot with a player)
             if (hasPlayer(slot) && hasMissingItem(slot)) {
