@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      5.4
+// @version      5.5
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, missing items, and flying/traveling members holding up the OC, with a summary panel
 // @author       Xoke
@@ -38,7 +38,7 @@
         if (!link || !link.href) return;
         e.stopPropagation();
         e.preventDefault();
-        window.open(link.href, '_blank', 'noopener,noreferrer');
+        window.location.href = link.href;
     }, true);
 
     const MIN_LEVEL = 1;
@@ -685,8 +685,6 @@
                 const link = document.createElement('a');
                 link.className = 'oc-summary-name';
                 link.href = entry.profileUrl;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
                 link.textContent = entry.name;
                 // Navigation itself is handled by a capture-phase listener on
                 // document (installed once at script init) - see its comment
