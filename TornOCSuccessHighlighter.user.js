@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      5.5
+// @version      5.6
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, missing items, and flying/traveling members holding up the OC, with a summary panel
 // @author       Xoke
@@ -656,17 +656,17 @@
 
             const name = getSlotMemberName(slot) || '?';
             const profileUrl = getSlotProfileUrl(slot);
-            const position = getPositionName(slot) || 'Unknown role';
-            const crimeName = getCrimeName(getOCCard(slot)) || 'Unknown crime';
 
             if (tag === 'flying') {
-                flying.push({ name, profileUrl, detail: `${position} - ${crimeName}` });
+                flying.push({ name, profileUrl });
             } else if (tag === 'missingItem') {
                 const label = slot.querySelector('.oc-missing-label');
                 const match = label && label.textContent.match(/^⊘\s*(.+)$/);
                 const itemName = match ? match[1] : '?';
-                missing.push({ name, profileUrl, detail: `${position} - ${crimeName}: ${itemName}` });
+                missing.push({ name, profileUrl, detail: itemName });
             } else if (tag === 'lowSuccess') {
+                const position = getPositionName(slot) || 'Unknown role';
+                const crimeName = getCrimeName(getOCCard(slot)) || 'Unknown crime';
                 const successRate = getSuccessRate(slot);
                 lowSuccess.push({ name, profileUrl, detail: `${position} - ${crimeName}: ${successRate}%` });
             }
@@ -696,7 +696,9 @@
                 span.textContent = entry.name;
                 rowEl.appendChild(span);
             }
-            rowEl.appendChild(document.createTextNode(' — ' + entry.detail));
+            if (entry.detail) {
+                rowEl.appendChild(document.createTextNode(' — ' + entry.detail));
+            }
         } else {
             rowEl.appendChild(document.createTextNode(entry.detail));
         }
