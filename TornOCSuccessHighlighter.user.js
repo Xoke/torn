@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      5.1
+// @version      5.2
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, missing items, and flying/traveling members holding up the OC, with a summary panel
 // @author       Xoke
@@ -672,6 +672,17 @@
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
                 link.textContent = entry.name;
+                // Torn's SPA router listens for anchor clicks and swallows this
+                // navigation (it's not one of its own routes). Stop the click
+                // from bubbling to that document-level handler, and force the
+                // navigation ourselves in case an ancestor's capture-phase
+                // handler already cancelled the default action.
+                link.addEventListener('mousedown', e => e.stopPropagation());
+                link.addEventListener('click', e => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    window.open(entry.profileUrl, '_blank', 'noopener,noreferrer');
+                });
                 rowEl.appendChild(link);
             } else {
                 const span = document.createElement('span');
