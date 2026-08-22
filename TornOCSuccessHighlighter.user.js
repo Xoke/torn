@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      5.2
+// @version      5.3
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, missing items, and flying/traveling members holding up the OC, with a summary panel
 // @author       Xoke
@@ -24,6 +24,22 @@
     function debugLog(...args) {
         if (DEBUG) console.log('[OC Highlighter]', ...args);
     }
+
+    // Torn's SPA has its own click handler (attached to a React root container,
+    // not document) that intercepts anchor clicks for client-side routing and
+    // swallows navigation to URLs it doesn't recognize as a route (e.g. our
+    // profile links). A listener on the link itself fires too late - the SPA's
+    // capture-phase handler on an ancestor already ran by then. document is the
+    // outermost ancestor, so a capture-phase listener registered here always
+    // runs before any listener on a descendant, regardless of registration
+    // order. Handle our summary-panel profile links here, before that happens.
+    document.addEventListener('click', function(e) {
+        const link = e.target.closest && e.target.closest('a.oc-summary-name');
+        if (!link || !link.href) return;
+        e.stopPropagation();
+        e.preventDefault();
+        window.open(link.href, '_blank', 'noopener,noreferrer');
+    }, true);
 
     const MIN_LEVEL = 1;
     const MAX_LEVEL = 10;
@@ -672,17 +688,9 @@
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
                 link.textContent = entry.name;
-                // Torn's SPA router listens for anchor clicks and swallows this
-                // navigation (it's not one of its own routes). Stop the click
-                // from bubbling to that document-level handler, and force the
-                // navigation ourselves in case an ancestor's capture-phase
-                // handler already cancelled the default action.
-                link.addEventListener('mousedown', e => e.stopPropagation());
-                link.addEventListener('click', e => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    window.open(entry.profileUrl, '_blank', 'noopener,noreferrer');
-                });
+                // Navigation itself is handled by a capture-phase listener on
+                // document (installed once at script init) - see its comment
+                // for why a per-link handler isn't enough.
                 rowEl.appendChild(link);
             } else {
                 const span = document.createElement('span');
