@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      5.3
+// @version      5.4
 // @run-at       document-end
 // @description  Highlights low success OC participants, stalled OCs, missing items, and flying/traveling members holding up the OC, with a summary panel
 // @author       Xoke
@@ -706,12 +706,26 @@
         return rowEl;
     }
 
-    // Render the summary panel content from the latest collectSummary() result
+    // Signature of a summary's contents, used to skip pointless DOM rebuilds
+    let _lastSummarySignature = null;
+    function summarySignature(summary) {
+        return JSON.stringify(summary);
+    }
+
+    // Render the summary panel content from the latest collectSummary() result.
+    // Rebuilds the DOM only when the content actually changed - the crimes
+    // container mutates constantly (live OC countdown timers), which drives
+    // runAllChecks every ~100ms; rebuilding unconditionally would occasionally
+    // yank a profile link out from under the user mid-click.
     function updateSummaryPanel() {
         const panel = document.getElementById('oc-summary-panel');
         if (!panel) return;
         const summary = collectSummary();
         if (!summary) return;
+
+        const signature = summarySignature(summary);
+        if (signature === _lastSummarySignature) return;
+        _lastSummarySignature = signature;
 
         const groups = [
             { type: 'flying', label: `✈ Flying (${summary.flying.length})`, entries: summary.flying },
