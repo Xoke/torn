@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      4.9
+// @version      5.0
 // @run-at       document-end
-// @description  Highlights low success OC participants, stalled OCs, missing items, and flying/traveling members holding up the OC
+// @description  Highlights low success OC participants, stalled OCs, missing items, and flying/traveling members holding up the OC, with a summary panel
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
 // @homepageURL  https://github.com/Xoke/torn

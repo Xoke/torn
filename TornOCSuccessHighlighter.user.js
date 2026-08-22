@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Torn OC Success Highlighter
 // @namespace    https://xoke.org/
-// @version      4.9
+// @version      5.0
 // @run-at       document-end
-// @description  Highlights low success OC participants, stalled OCs, missing items, and flying/traveling members holding up the OC
+// @description  Highlights low success OC participants, stalled OCs, missing items, and flying/traveling members holding up the OC, with a summary panel
 // @author       Xoke
 // @match        https://www.torn.com/factions.php*
 // @homepageURL  https://github.com/Xoke/torn
@@ -488,6 +488,31 @@
                 accent-color: #667;
                 cursor: pointer;
             }
+            #oc-summary-panel {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                background: #1a1a2e;
+                border: 1px solid #334;
+                border-radius: 4px;
+                padding: 6px 10px;
+                margin-bottom: 6px;
+                font-family: sans-serif;
+                font-size: 11px;
+            }
+            .oc-summary-row {
+                color: #ccc;
+                line-height: 1.5;
+            }
+            .oc-summary-row .oc-summary-label {
+                font-weight: bold;
+                margin-right: 4px;
+            }
+            .oc-summary-row.oc-summary-flying .oc-summary-label { color: #33ccff; }
+            .oc-summary-row.oc-summary-missing .oc-summary-label { color: #dd66ff; }
+            .oc-summary-row.oc-summary-low .oc-summary-label { color: #ffcc00; }
+            .oc-summary-row.oc-summary-stalled .oc-summary-label { color: #ff8800; }
+            .oc-summary-row.oc-summary-empty { color: #667; font-style: italic; }
         `;
         document.head.appendChild(style);
     })();
@@ -568,6 +593,95 @@
             if (statusEl) statusEl.textContent = 'Loading...';
             loadRemoteConfig(true);
         });
+    }
+
+    // Gather current flying/missing-item/low-success/stalled slots into a summary
+    function collectSummary() {
+        const root = document.querySelector('#faction-crimes, .faction-crimes-wrap, #faction-crimes-root');
+        if (!root) return null;
+
+        const flying = [];
+        const missing = [];
+        const lowSuccess = [];
+        const stalled = [];
+
+        root.querySelectorAll('[data-oc-id]').forEach(card => {
+            if ((card.dataset.ocHighlighted || '') === 'stalled') {
+                stalled.push(getCrimeName(card) || 'Unknown crime');
+            }
+        });
+
+        root.querySelectorAll('[class*="wrapper___"][class*="success"]').forEach(slot => {
+            if (!slot.querySelector('[class*="slotHeader___"]')) return;
+            const tag = slot.dataset.ocHighlighted || '';
+            if (!tag) return;
+
+            const memberName = getSlotMemberName(slot) || '?';
+            const position = getPositionName(slot) || 'Unknown role';
+            const crimeName = getCrimeName(getOCCard(slot)) || 'Unknown crime';
+
+            if (tag === 'flying') {
+                flying.push(`${memberName} (${position} - ${crimeName})`);
+            } else if (tag === 'missingItem') {
+                const label = slot.querySelector('.oc-missing-label');
+                const match = label && label.textContent.match(/^⊘\s*(.+)$/);
+                const itemName = match ? match[1] : '?';
+                missing.push(`${memberName} (${position} - ${crimeName}): ${itemName}`);
+            } else if (tag === 'lowSuccess') {
+                const successRate = getSuccessRate(slot);
+                lowSuccess.push(`${memberName} (${position} - ${crimeName}): ${successRate}%`);
+            }
+        });
+
+        return { flying, missing, lowSuccess, stalled };
+    }
+
+    // Render the summary panel content from the latest collectSummary() result
+    function updateSummaryPanel() {
+        const panel = document.getElementById('oc-summary-panel');
+        if (!panel) return;
+        const summary = collectSummary();
+        if (!summary) return;
+
+        const rows = [
+            { type: 'flying', label: `✈ Flying (${summary.flying.length})`, items: summary.flying },
+            { type: 'missing', label: `⊘ Missing item (${summary.missing.length})`, items: summary.missing },
+            { type: 'low', label: `⚠ Low success (${summary.lowSuccess.length})`, items: summary.lowSuccess },
+            { type: 'stalled', label: `⏸ Stalled (${summary.stalled.length})`, items: summary.stalled },
+        ].filter(row => row.items.length > 0);
+
+        panel.textContent = '';
+        if (rows.length === 0) {
+            const row = document.createElement('div');
+            row.className = 'oc-summary-row oc-summary-empty';
+            row.textContent = 'No issues detected';
+            panel.appendChild(row);
+            return;
+        }
+
+        rows.forEach(row => {
+            const rowEl = document.createElement('div');
+            rowEl.className = `oc-summary-row oc-summary-${row.type}`;
+            const labelEl = document.createElement('span');
+            labelEl.className = 'oc-summary-label';
+            labelEl.textContent = row.label + ':';
+            rowEl.appendChild(labelEl);
+            rowEl.appendChild(document.createTextNode(row.items.join(', ')));
+            panel.appendChild(rowEl);
+        });
+    }
+
+    // Inject the summary panel just above the OC Thresholds button (re-checked each runAllChecks)
+    function injectSummaryPanel() {
+        if (document.getElementById('oc-summary-panel')) return;
+        const root = document.querySelector('#faction-crimes, .faction-crimes-wrap, #faction-crimes-root');
+        if (!root) return;
+        const firstCard = root.querySelector('[data-oc-id]');
+        if (!firstCard) return;
+
+        const panel = document.createElement('div');
+        panel.id = 'oc-summary-panel';
+        firstCard.parentElement.insertBefore(panel, firstCard);
     }
 
     // Inject the settings button above the first crime card (re-checked each runAllChecks)
@@ -838,12 +952,14 @@
 
     // Run all checks
     function runAllChecks() {
+        injectSummaryPanel();
         injectSettingsButton();
         highlightStalledOCs();
         highlightStalledOC2Rows();
         highlightSlotIssues();
         highlightUnavailableMembers();
         labelMissingItems(); // async — runs in background, won't block other checks
+        updateSummaryPanel();
     }
 
     // Initialize with retry logic for dynamic content
