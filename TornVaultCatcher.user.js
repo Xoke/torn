@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Vault Catcher
 // @namespace    https://xoke.org/
-// @version      2.2
+// @version      2.3
 // @description  Warns when giving a faction member more money than their vault balance
 // @author       Xoke (based on VaultCatcher by Lazerpent [2112641])
 // @match        https://www.torn.com/factions.php*
@@ -139,101 +139,6 @@
         return true;
     }
 
-    function setMoneyInput(value) {
-        const container = document.getElementById('option-give-to-user');
-        if (!container) return;
-
-        // Find visible and hidden money inputs (not inside depositor list)
-        const allVisible = container.querySelectorAll('input.input-money:not([type="hidden"])');
-        const allHidden = container.querySelectorAll('input[type="hidden"].input-money');
-
-        let visibleInput = null;
-        let hiddenInput = null;
-        for (const input of allVisible) {
-            if (!input.closest('li')) { visibleInput = input; break; }
-        }
-        for (const input of allHidden) {
-            if (!input.closest('li')) { hiddenInput = input; break; }
-        }
-
-        const formatted = '$' + value.toLocaleString();
-
-        // Use React's native setter to trigger change detection
-        var nativeSetter = Object.getOwnPropertyDescriptor(
-            window.HTMLInputElement.prototype, 'value'
-        ).set;
-
-        if (visibleInput) {
-            nativeSetter.call(visibleInput, formatted);
-            visibleInput.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-        if (hiddenInput) {
-            nativeSetter.call(hiddenInput, String(value));
-            hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-    }
-
-    function addFillBalanceButton() {
-        const container = document.getElementById('option-give-to-user');
-        if (!container) return;
-        if (container.querySelector('.vault-catcher-fill-btn')) return;
-
-        // Find the money input group by anchoring to the give-money radio button.
-        // Both the money and points panels share the same .input-money-group class,
-        // so grabbing the first match is ambiguous after a re-render. Walking up from
-        // the radio button guarantees we stay in the correct (money) panel.
-        var moneyGroup = null;
-        const radioAnchor = document.getElementById('give-money') ||
-                            document.getElementById('add-money-to-balance');
-        if (radioAnchor) {
-            let el = radioAnchor.parentElement;
-            while (el && el !== container) {
-                const group = el.querySelector('.input-money-group');
-                if (group && !group.closest('li')) { moneyGroup = group; break; }
-                el = el.parentElement;
-            }
-        }
-        // If radio buttons aren't present (e.g. confirm dialog is showing, or React
-        // mid-render), bail out. The observer will retry once the form stabilises.
-        if (!moneyGroup) return;
-
-        // Make the group a positioning context for the inset button
-        moneyGroup.style.position = 'relative';
-
-        // Add right padding to the visible input so text doesn't slide under the button
-        var visibleInput = moneyGroup.querySelector('input.input-money:not([type="hidden"])');
-        if (visibleInput) visibleInput.style.paddingRight = '36px';
-
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'vault-catcher-fill-btn';
-        btn.textContent = 'Bal';
-        btn.style.cssText =
-            'position: absolute; right: 0; top: 0; bottom: 0; ' +
-            'padding: 0 8px; font-size: 11px; cursor: pointer; ' +
-            'background: #2980b9; color: white; border: none; border-radius: 0 3px 3px 0; ' +
-            'z-index: 1;';
-
-        btn.addEventListener('mouseenter', function () { btn.style.background = '#3498db'; });
-        btn.addEventListener('mouseleave', function () { btn.style.background = '#2980b9'; });
-
-        btn.addEventListener('click', function (e) {
-            e.preventDefault();
-            var balance = getSelectedBalance();
-            if (balance === null || isNaN(balance)) {
-                showNotification('Could not determine the selected member\'s vault balance.', 'error');
-                return;
-            }
-            if (balance <= 0) {
-                showNotification('This member has no vault balance.', 'error');
-                return;
-            }
-            setMoneyInput(balance);
-        });
-
-        moneyGroup.appendChild(btn);
-    }
-
     // Bind the vault-balance check to a submit button (idempotent per button).
     // React re-renders can replace the button, so this may be called repeatedly.
     function bindSubmitIntercept(submitBtn) {
@@ -299,16 +204,12 @@
         if (observedContainer === container) return;
         observedContainer = container;
 
-        addFillBalanceButton();
-
-        // Watch for React re-renders that destroy our fill button or replace the
-        // submit button (losing our listener). Debounce so we wait for React to
-        // finish before re-adding/re-binding.
+        // Watch for React re-renders that replace the submit button (losing our
+        // listener). Debounce so we wait for React to finish before re-binding.
         var rebindTimer = null;
         var btnObserver = new MutationObserver(function () {
             clearTimeout(rebindTimer);
             rebindTimer = setTimeout(function () {
-                addFillBalanceButton();
                 const btn = container.querySelector('button[type="submit"].torn-btn');
                 if (btn) bindSubmitIntercept(btn);
             }, 300);
