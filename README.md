@@ -43,6 +43,9 @@ Warns faction bankers when giving a member more money than their vault balance, 
 ### [Torn Shoplifting Store Alert](https://raw.githubusercontent.com/Xoke/torn/main/TornShopliftingAlert.user.js)
 Alerts when any shoplifting store (jewelry store, gun shop, clothing store, etc.) has all of its security — cameras, guard, checkpoint — disabled at once. Plays an audio chime and shows a clickable banner listing the open stores. A gear button on the crimes page (`sid=crimes`) opens a settings panel to enable/disable alerts per store — handy if you already have a merit like the Cluster Ring and don't need that one. Polls every 30 seconds. Requires an API key on first run. Generalizes [Torn Jewelry Store Cluster Ring Alert](https://greasyfork.org/en/scripts/553079-torn-jewelry-store-cluster-ring-alert) by swervelord (which only covered the jewelry store) to every shoplifting location.
 
+### [Torn Revive Chance Highlighter](https://raw.githubusercontent.com/Xoke/torn/main/TornReviveChanceHighlighter.user.js)
+On the hospital page, highlights revive prompts ("Reviving X has a Y% chance of success...") in green when the chance is at or above your threshold and in red when it's below. The threshold defaults to 90% and can be changed from the gear button on the right edge of the page.
+
 ## Other Useful Scripts
 
 Scripts by other authors that I've found useful.
