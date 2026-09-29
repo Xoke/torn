@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Revive Chance Highlighter
 // @namespace    https://xoke.org/
-// @version      1.1
+// @version      1.2
 // @description  Highlights revive attempts on the hospital page whose chance of success meets a configurable threshold (default 90%)
 // @author       Xoke
 // @match        https://www.torn.com/hospitalview.php*
@@ -39,16 +39,21 @@
     let settingsModalEl = null;
 
     GM_addStyle(`
-        .${GOOD_CLASS} {
+        .confirm-revive.${GOOD_CLASS} {
             background: rgba(40, 167, 69, 0.35) !important;
             outline: 2px solid #28a745 !important;
-            border-radius: 4px;
+            outline-offset: -2px;
         }
 
-        .${BAD_CLASS} {
+        .confirm-revive.${BAD_CLASS} {
             background: rgba(220, 53, 69, 0.18) !important;
             outline: 1px solid rgba(220, 53, 69, 0.6) !important;
-            border-radius: 4px;
+            outline-offset: -1px;
+        }
+
+        .confirm-revive.${GOOD_CLASS} .action-yes {
+            box-shadow: 0 0 0 2px #28a745, 0 0 8px 2px rgba(40, 167, 69, 0.8) !important;
+            border-radius: 3px;
         }
 
         #torn-rch-settings-btn {
@@ -155,31 +160,28 @@
         el.classList.toggle(BAD_CLASS, !good);
     }
 
-    function clearHighlight(row) {
-        row.removeAttribute(PCT_ATTR);
-        row.classList.remove(GOOD_CLASS, BAD_CLASS);
+    function clearHighlight(box) {
+        box.removeAttribute(PCT_ATTR);
+        box.classList.remove(GOOD_CLASS, BAD_CLASS);
     }
 
-    // Clicking REVIVE on a row loads the confirmation text into that row's
-    // .confirm-revive box via AJAX. Highlight the whole row (the <li>) based on
-    // the chance it shows; clear it once the box shows something else (e.g.
-    // after reviving).
+    // Clicking REVIVE on a row loads the confirmation text and Yes/No buttons
+    // into that row's .confirm-revive box via AJAX. Highlight that box based on
+    // the chance it shows; clear it once it shows something else (e.g. after
+    // reviving).
     function scan() {
         document.querySelectorAll('.user-info-list-wrap .confirm-revive').forEach(function (box) {
-            const row = box.closest('li');
-            if (!row) return;
-
             const match = REVIVE_RE.exec(box.textContent);
             if (!match) {
-                if (row.hasAttribute(PCT_ATTR)) clearHighlight(row);
+                if (box.hasAttribute(PCT_ATTR)) clearHighlight(box);
                 return;
             }
 
             const pct = match[2];
-            if (row.getAttribute(PCT_ATTR) === pct) return;
+            if (box.getAttribute(PCT_ATTR) === pct) return;
 
-            row.setAttribute(PCT_ATTR, pct);
-            applyHighlight(row);
+            box.setAttribute(PCT_ATTR, pct);
+            applyHighlight(box);
             debugLog(match[1], pct + '%');
         });
     }
