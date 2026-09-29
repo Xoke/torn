@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Revive Chance Highlighter
 // @namespace    https://xoke.org/
-// @version      1.2
+// @version      1.3
 // @description  Highlights revive attempts on the hospital page whose chance of success meets a configurable threshold (default 90%)
 // @author       Xoke
 // @match        https://www.torn.com/hospitalview.php*
@@ -39,16 +39,23 @@
     let settingsModalEl = null;
 
     GM_addStyle(`
-        .confirm-revive.${GOOD_CLASS} {
+        li.${GOOD_CLASS} {
             background: rgba(40, 167, 69, 0.35) !important;
             outline: 2px solid #28a745 !important;
             outline-offset: -2px;
         }
 
-        .confirm-revive.${BAD_CLASS} {
+        li.${BAD_CLASS} {
             background: rgba(220, 53, 69, 0.18) !important;
             outline: 1px solid rgba(220, 53, 69, 0.6) !important;
             outline-offset: -1px;
+        }
+
+        /* Torn gives the confirm box an opaque background; clear it so the
+           row's tint covers the chance line and Yes/No buttons too. */
+        .confirm-revive.${GOOD_CLASS},
+        .confirm-revive.${BAD_CLASS} {
+            background: transparent !important;
         }
 
         .confirm-revive.${GOOD_CLASS} .action-yes {
@@ -153,16 +160,26 @@
         }
     `);
 
-    function applyHighlight(el) {
-        const pct = parseFloat(el.getAttribute(PCT_ATTR));
+    // Highlight both the confirm box and its player row.
+    function highlightTargets(box) {
+        const row = box.closest('li');
+        return row ? [box, row] : [box];
+    }
+
+    function applyHighlight(box) {
+        const pct = parseFloat(box.getAttribute(PCT_ATTR));
         const good = pct >= threshold;
-        el.classList.toggle(GOOD_CLASS, good);
-        el.classList.toggle(BAD_CLASS, !good);
+        highlightTargets(box).forEach(function (el) {
+            el.classList.toggle(GOOD_CLASS, good);
+            el.classList.toggle(BAD_CLASS, !good);
+        });
     }
 
     function clearHighlight(box) {
         box.removeAttribute(PCT_ATTR);
-        box.classList.remove(GOOD_CLASS, BAD_CLASS);
+        highlightTargets(box).forEach(function (el) {
+            el.classList.remove(GOOD_CLASS, BAD_CLASS);
+        });
     }
 
     // Clicking REVIVE on a row loads the confirmation text and Yes/No buttons
