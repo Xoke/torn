@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Revive Chance Highlighter
 // @namespace    https://xoke.org/
-// @version      1.0
+// @version      1.1
 // @description  Highlights revive attempts on the hospital page whose chance of success meets a configurable threshold (default 90%)
 // @author       Xoke
 // @match        https://www.torn.com/hospitalview.php*
@@ -23,7 +23,6 @@
 
     // e.g. "Reviving Grundig has a 61.04% chance of success and will use 40 energy"
     const REVIVE_RE = /Reviving\s+(.+?)\s+has\s+a\s+([\d.]+)%\s+chance\s+of\s+success/i;
-    const MARKER_TEXT = 'chance of success';
 
     const GOOD_CLASS = 'torn-rch-good';
     const BAD_CLASS = 'torn-rch-bad';
@@ -156,36 +155,33 @@
         el.classList.toggle(BAD_CLASS, !good);
     }
 
-    // The revive text may be split across several elements (e.g. the name in a
-    // link), so start from each text node containing the marker and walk up to
-    // the smallest element whose full text matches the pattern.
-    function scan() {
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-            acceptNode: function (node) {
-                return node.nodeValue.indexOf(MARKER_TEXT) !== -1
-                    ? NodeFilter.FILTER_ACCEPT
-                    : NodeFilter.FILTER_SKIP;
-            }
-        });
+    function clearHighlight(row) {
+        row.removeAttribute(PCT_ATTR);
+        row.classList.remove(GOOD_CLASS, BAD_CLASS);
+    }
 
-        let node;
-        while ((node = walker.nextNode())) {
-            let el = node.parentElement;
-            let match = null;
-            while (el && el !== document.body) {
-                match = REVIVE_RE.exec(el.textContent);
-                if (match) break;
-                el = el.parentElement;
+    // Clicking REVIVE on a row loads the confirmation text into that row's
+    // .confirm-revive box via AJAX. Highlight the whole row (the <li>) based on
+    // the chance it shows; clear it once the box shows something else (e.g.
+    // after reviving).
+    function scan() {
+        document.querySelectorAll('.user-info-list-wrap .confirm-revive').forEach(function (box) {
+            const row = box.closest('li');
+            if (!row) return;
+
+            const match = REVIVE_RE.exec(box.textContent);
+            if (!match) {
+                if (row.hasAttribute(PCT_ATTR)) clearHighlight(row);
+                return;
             }
-            if (!match || !el || el === document.body) continue;
 
             const pct = match[2];
-            if (el.getAttribute(PCT_ATTR) === pct) continue;
+            if (row.getAttribute(PCT_ATTR) === pct) return;
 
-            el.setAttribute(PCT_ATTR, pct);
-            applyHighlight(el);
+            row.setAttribute(PCT_ATTR, pct);
+            applyHighlight(row);
             debugLog(match[1], pct + '%');
-        }
+        });
     }
 
     function reapplyAll() {
@@ -282,7 +278,7 @@
         new MutationObserver(function () {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(scan, 150);
-        }).observe(document.body, { childList: true, subtree: true, characterData: true });
+        }).observe(document.body, { childList: true, subtree: true });
     }
 
     if (document.readyState === 'loading') {

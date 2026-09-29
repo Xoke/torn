@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Revive Chance Highlighter
 // @namespace    https://xoke.org/
-// @version      1.0
+// @version      1.1
 // @description  Highlights revive attempts on the hospital page whose chance of success meets a configurable threshold (default 90%)
 // @author       Xoke
 // @match        https://www.torn.com/hospitalview.php*
