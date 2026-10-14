@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Shoplifting Store Alert
 // @namespace    https://xoke.org/
-// @version      1.3
+// @version      1.4
 // @description  Alerts when the security you pick (cameras/guards/checkpoint) is disabled at any shoplifting store
 // @author       Xoke (based on "Torn Jewelry Store Cluster Ring Alert" by swervelord)
 // @match        https://www.torn.com/*
@@ -28,6 +28,7 @@
     const API_KEY_STORAGE = 'tornShopliftingAlertApiKey';
     const ENABLED_STORES_STORAGE = 'tornShopliftingAlertEnabledStores'; // legacy, migrated below
     const REQUIREMENTS_STORAGE = 'tornShopliftingAlertRequirements';
+    const MATCH_ANY_STORAGE = 'tornShopliftingAlertMatchAny';
     const SHOPLIFTING_URL = 'https://www.torn.com/page.php?sid=crimes#/shoplifting';
 
     // Known store keys as returned by the API, with display labels and the
@@ -127,6 +128,12 @@
 
     function isRequired(reqs, storeKey, type) {
         return !(reqs[storeKey] && reqs[storeKey][type] === false);
+    }
+
+    // { storeKey: true } means the store alerts when ANY ticked security is
+    // down; otherwise (the default) ALL ticked security must be down.
+    function getMatchAny() {
+        return GM_getValue(MATCH_ANY_STORAGE, {});
     }
 
     GM_addStyle(`
@@ -275,6 +282,15 @@
         #torn-sa-modal .torn-sa-store-row label {
             cursor: pointer;
             margin-right: 6px;
+        }
+
+        #torn-sa-modal .torn-sa-mode {
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            border-radius: 4px;
+            font-size: 12px;
+            padding: 1px 2px;
         }
 
         #torn-sa-modal-buttons {
@@ -430,11 +446,13 @@
 
         const hint = document.createElement('div');
         hint.className = 'torn-sa-hint';
-        hint.textContent = 'Alert when all ticked security at a store is down. ' +
+        hint.textContent = 'Tick the security you care about at each store. ' +
+            'All: alert when every ticked one is down. Any: alert when at least one is. ' +
             'Untick everything to ignore a store.';
         modal.appendChild(hint);
 
         const reqs = getRequirements();
+        const matchAny = getMatchAny();
         // Use whatever stores/security we've actually seen from the API (falls
         // back to the known list before the first successful poll), so a store
         // the API adds or changes in the future still shows up here.
@@ -466,6 +484,25 @@
                 row.appendChild(checkbox);
                 row.appendChild(label);
             });
+
+            if (lastKnownSecurity[key].length > 1) {
+                const mode = document.createElement('select');
+                mode.className = 'torn-sa-mode';
+                mode.title = 'All: every ticked security must be down. Any: at least one.';
+                [['all', 'All'], ['any', 'Any']].forEach(function (opt) {
+                    const o = document.createElement('option');
+                    o.value = opt[0];
+                    o.textContent = opt[1];
+                    mode.appendChild(o);
+                });
+                mode.value = matchAny[key] ? 'any' : 'all';
+                mode.addEventListener('change', function () {
+                    const current = getMatchAny();
+                    current[key] = mode.value === 'any';
+                    GM_setValue(MATCH_ANY_STORAGE, current);
+                });
+                row.appendChild(mode);
+            }
 
             modal.appendChild(row);
         });
@@ -545,6 +582,7 @@
                 }
 
                 const reqs = getRequirements();
+                const matchAny = getMatchAny();
                 const openStores = []; // [{ key, down: [security types that are down] }]
 
                 allStoreKeys.forEach(function (storeKey) {
@@ -554,8 +592,9 @@
                         return item && isRequired(reqs, storeKey, securityType(item.title));
                     });
                     if (required.length === 0) return; // nothing ticked: store ignored
-                    const allRequiredDown = required.every(function (item) { return item.disabled === true; });
-                    if (!allRequiredDown) return;
+                    const isDown = function (item) { return item.disabled === true; };
+                    const triggered = matchAny[storeKey] ? required.some(isDown) : required.every(isDown);
+                    if (!triggered) return;
                     openStores.push({
                         key: storeKey,
                         down: items
