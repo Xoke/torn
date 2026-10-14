@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn Shoplifting Store Alert
 // @namespace    https://xoke.org/
-// @version      1.2
-// @description  Alerts when any shoplifting store has all of its security (cameras/guard/checkpoint) disabled at once
+// @version      1.3
+// @description  Alerts when the security you pick (cameras/guards/checkpoint) is disabled at any shoplifting store
 // @author       Xoke (based on "Torn Jewelry Store Cluster Ring Alert" by swervelord)
 // @match        https://www.torn.com/*
 // @run-at       document-end

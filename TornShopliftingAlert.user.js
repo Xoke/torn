@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn Shoplifting Store Alert
 // @namespace    https://xoke.org/
-// @version      1.2
-// @description  Alerts when any shoplifting store has all of its security (cameras/guard/checkpoint) disabled at once
+// @version      1.3
+// @description  Alerts when the security you pick (cameras/guards/checkpoint) is disabled at any shoplifting store
 // @author       Xoke (based on "Torn Jewelry Store Cluster Ring Alert" by swervelord)
 // @match        https://www.torn.com/*
 // @run-at       document-end
@@ -26,21 +26,23 @@
     const DEBUG = false;
     const POLL_INTERVAL = 30000;
     const API_KEY_STORAGE = 'tornShopliftingAlertApiKey';
-    const ENABLED_STORES_STORAGE = 'tornShopliftingAlertEnabledStores';
+    const ENABLED_STORES_STORAGE = 'tornShopliftingAlertEnabledStores'; // legacy, migrated below
+    const REQUIREMENTS_STORAGE = 'tornShopliftingAlertRequirements';
     const SHOPLIFTING_URL = 'https://www.torn.com/page.php?sid=crimes#/shoplifting';
 
-    // Known store keys as returned by the API, with display labels.
-    // Any store key the API returns that isn't in this list is treated as
-    // enabled by default and shown with an auto-generated label.
+    // Known store keys as returned by the API, with display labels and the
+    // security types each store has. Any store key or security type the API
+    // returns that isn't listed here is required-down by default and shown
+    // with an auto-generated label.
     const KNOWN_STORES = [
-        { key: 'sallys_sweet_shop', label: "Sally's Sweet Shop" },
-        { key: 'Bits_n_bobs', label: "Bits 'n' Bobs" },
-        { key: 'tc_clothing', label: 'TC Clothing' },
-        { key: 'super_store', label: 'Super Store' },
-        { key: 'cyber_force', label: 'Cyber Force' },
-        { key: 'pharmacy', label: 'Pharmacy' },
-        { key: 'big_als', label: "Big Al's Gun Shop" },
-        { key: 'jewelry_store', label: 'Jewelry Store (Cluster Ring)' }
+        { key: 'sallys_sweet_shop', label: "Sally's Sweet Shop", security: ['cameras'] },
+        { key: 'Bits_n_bobs', label: "Bits 'n' Bobs", security: ['cameras'] },
+        { key: 'tc_clothing', label: 'TC Clothing', security: ['cameras', 'checkpoint'] },
+        { key: 'super_store', label: 'Super Store', security: ['cameras', 'checkpoint'] },
+        { key: 'cyber_force', label: 'Cyber Force', security: ['cameras', 'guards'] },
+        { key: 'pharmacy', label: 'Pharmacy', security: ['cameras', 'checkpoint'] },
+        { key: 'big_als', label: "Big Al's Gun Shop", security: ['cameras', 'guards'] },
+        { key: 'jewelry_store', label: 'Jewelry Store (Cluster Ring)', security: ['cameras', 'guards'] }
     ];
 
     function debugLog(...args) {
@@ -54,7 +56,9 @@
     let pollTimer = null;
     let audioCtx = null;
     let lastOpenStores = new Set();
-    let lastKnownStoreKeys = KNOWN_STORES.map(function (s) { return s.key; });
+    // store key -> list of security types, refreshed from each API response
+    let lastKnownSecurity = {};
+    KNOWN_STORES.forEach(function (s) { lastKnownSecurity[s.key] = s.security.slice(); });
 
     // Cross-tab leader election via localStorage so only one torn.com tab polls
     // the API. The leader refreshes its heartbeat every poll; a stale heartbeat
@@ -85,13 +89,44 @@
         } catch (e) {}
     });
 
-    function getEnabledStores() {
-        return GM_getValue(ENABLED_STORES_STORAGE, {});
+    // "One camera" / "Four cameras" -> "cameras", "Two guards" -> "guards", etc.
+    // so a store's setting survives its camera/guard count changing.
+    function securityType(title) {
+        const t = String(title || '').toLowerCase();
+        if (t.indexOf('camera') !== -1) return 'cameras';
+        if (t.indexOf('guard') !== -1) return 'guards';
+        if (t.indexOf('checkpoint') !== -1) return 'checkpoint';
+        return t;
     }
 
-    function isStoreEnabled(key) {
-        const settings = getEnabledStores();
-        return settings[key] !== false; // enabled by default unless explicitly turned off
+    function securityLabel(type) {
+        return type.charAt(0).toUpperCase() + type.slice(1);
+    }
+
+    // Requirements: { storeKey: { securityType: bool } } where true means
+    // "this must be down for the store to alert". Missing entries default to
+    // true; a store with nothing ticked never alerts.
+    function getRequirements() {
+        let reqs = GM_getValue(REQUIREMENTS_STORAGE, null);
+        if (reqs) return reqs;
+
+        // Migrate the old per-store on/off setting: a disabled store gets all
+        // of its security unticked.
+        reqs = {};
+        const oldEnabled = GM_getValue(ENABLED_STORES_STORAGE, {});
+        Object.keys(oldEnabled).forEach(function (storeKey) {
+            if (oldEnabled[storeKey] !== false) return;
+            reqs[storeKey] = {};
+            (lastKnownSecurity[storeKey] || []).forEach(function (type) {
+                reqs[storeKey][type] = false;
+            });
+        });
+        GM_setValue(REQUIREMENTS_STORAGE, reqs);
+        return reqs;
+    }
+
+    function isRequired(reqs, storeKey, type) {
+        return !(reqs[storeKey] && reqs[storeKey][type] === false);
     }
 
     GM_addStyle(`
@@ -209,7 +244,7 @@
             border: 2px solid #444;
             border-radius: 8px;
             padding: 20px;
-            width: 320px;
+            width: 380px;
             font-family: Arial, sans-serif;
             color: #ddd;
             box-shadow: 0 4px 20px rgba(0,0,0,0.6);
@@ -220,15 +255,26 @@
             color: #fff;
         }
 
+        #torn-sa-modal .torn-sa-hint {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 10px;
+        }
+
         #torn-sa-modal .torn-sa-store-row {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             padding: 4px 0;
+        }
+
+        #torn-sa-modal .torn-sa-store-name {
+            flex: 1;
         }
 
         #torn-sa-modal .torn-sa-store-row label {
             cursor: pointer;
+            margin-right: 6px;
         }
 
         #torn-sa-modal-buttons {
@@ -321,8 +367,9 @@
         const link = document.createElement('a');
         link.id = 'torn-sa-link';
         link.href = SHOPLIFTING_URL;
-        link.textContent = '🚨 ' + openStores.map(storeDisplayName).join(', ') +
-            ' — all security down! Click to shoplift';
+        link.textContent = '🚨 ' + openStores.map(function (s) {
+            return storeDisplayName(s.key) + ' (' + s.down.map(securityLabel).join(' + ') + ' down)';
+        }).join(', ') + ' — click to shoplift';
 
         inner.appendChild(link);
         bannerEl.appendChild(inner);
@@ -381,32 +428,45 @@
         title.textContent = 'Shoplifting Alert Settings';
         modal.appendChild(title);
 
-        const enabled = getEnabledStores();
-        // Use whatever stores we've actually seen from the API (falls back to
-        // the known list before the first successful poll), so a store the
-        // API adds or renames in the future still shows up here.
-        const storeKeys = lastKnownStoreKeys;
+        const hint = document.createElement('div');
+        hint.className = 'torn-sa-hint';
+        hint.textContent = 'Alert when all ticked security at a store is down. ' +
+            'Untick everything to ignore a store.';
+        modal.appendChild(hint);
 
-        storeKeys.forEach(function (key) {
+        const reqs = getRequirements();
+        // Use whatever stores/security we've actually seen from the API (falls
+        // back to the known list before the first successful poll), so a store
+        // the API adds or changes in the future still shows up here.
+        Object.keys(lastKnownSecurity).forEach(function (key) {
             const row = document.createElement('div');
             row.className = 'torn-sa-store-row';
 
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = 'torn-sa-store-' + key;
-            checkbox.checked = enabled[key] !== false;
-            checkbox.addEventListener('change', function () {
-                const current = getEnabledStores();
-                current[key] = checkbox.checked;
-                GM_setValue(ENABLED_STORES_STORAGE, current);
+            const name = document.createElement('span');
+            name.className = 'torn-sa-store-name';
+            name.textContent = storeDisplayName(key);
+            row.appendChild(name);
+
+            lastKnownSecurity[key].forEach(function (type) {
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = 'torn-sa-store-' + key + '-' + type.replace(/\W+/g, '_');
+                checkbox.checked = isRequired(reqs, key, type);
+                checkbox.addEventListener('change', function () {
+                    const current = getRequirements();
+                    current[key] = current[key] || {};
+                    current[key][type] = checkbox.checked;
+                    GM_setValue(REQUIREMENTS_STORAGE, current);
+                });
+
+                const label = document.createElement('label');
+                label.htmlFor = checkbox.id;
+                label.textContent = securityLabel(type);
+
+                row.appendChild(checkbox);
+                row.appendChild(label);
             });
 
-            const label = document.createElement('label');
-            label.htmlFor = checkbox.id;
-            label.textContent = storeDisplayName(key);
-
-            row.appendChild(checkbox);
-            row.appendChild(label);
             modal.appendChild(row);
         });
 
@@ -473,22 +533,43 @@
 
                 const shoplifting = data.shoplifting || {};
                 const allStoreKeys = Object.keys(shoplifting);
-                if (allStoreKeys.length > 0) lastKnownStoreKeys = allStoreKeys;
+                if (allStoreKeys.length > 0) {
+                    const seen = {};
+                    allStoreKeys.forEach(function (storeKey) {
+                        const items = shoplifting[storeKey];
+                        seen[storeKey] = Array.isArray(items)
+                            ? items.map(function (item) { return securityType(item && item.title); })
+                            : [];
+                    });
+                    lastKnownSecurity = seen;
+                }
 
-                const openStores = [];
+                const reqs = getRequirements();
+                const openStores = []; // [{ key, down: [security types that are down] }]
 
                 allStoreKeys.forEach(function (storeKey) {
-                    if (!isStoreEnabled(storeKey)) return;
                     const items = shoplifting[storeKey];
                     if (!Array.isArray(items) || items.length === 0) return;
-                    const allDisabled = items.every(function (item) { return item && item.disabled === true; });
-                    if (allDisabled) openStores.push(storeKey);
+                    const required = items.filter(function (item) {
+                        return item && isRequired(reqs, storeKey, securityType(item.title));
+                    });
+                    if (required.length === 0) return; // nothing ticked: store ignored
+                    const allRequiredDown = required.every(function (item) { return item.disabled === true; });
+                    if (!allRequiredDown) return;
+                    openStores.push({
+                        key: storeKey,
+                        down: items
+                            .filter(function (item) { return item && item.disabled === true; })
+                            .map(function (item) { return securityType(item.title); })
+                    });
                 });
 
                 debugLog('Open stores:', openStores);
 
-                const openSet = new Set(openStores);
-                const isNewOpening = openStores.some(function (s) { return !lastOpenStores.has(s); });
+                // Track store + what's down, so e.g. a second security going
+                // down at an already-open store chimes again.
+                const openSet = new Set(openStores.map(function (s) { return s.key + ':' + s.down.join('+'); }));
+                const isNewOpening = Array.from(openSet).some(function (s) { return !lastOpenStores.has(s); });
 
                 if (openStores.length > 0) {
                     if (isNewOpening) playAlert();
