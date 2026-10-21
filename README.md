@@ -46,6 +46,9 @@ Alerts when the security you care about at a shoplifting store (jewelry store, g
 ### [Torn Revive Chance Highlighter](https://raw.githubusercontent.com/Xoke/torn/main/TornReviveChanceHighlighter.user.js)
 On the hospital page, after you click REVIVE on a player, highlights that player's row, including the "Reviving X has a Y% chance of success" line and its Yes/No buttons, green when the chance is at or above your threshold (with a glow on Yes) and red when it's below. The threshold defaults to 90% and can be changed from the gear button on the right edge of the page.
 
+### [Torn Sell-Mug Check](https://raw.githubusercontent.com/Xoke/torn/main/TornSellMugCheck.user.js)
+When you open someone's bazaar, shows a panel with the seller's friends vs enemies, total money mugged, largest mug and attacks won, coloured Low / Medium / High as a rough guide to whether they might sell-mug you (mug you right after you buy, while you're carrying cash). Makes 2 API calls per seller, cached for 30 minutes. Requires an API key on first run (a public-level key is enough).
+
 ## Other Useful Scripts
 
 Scripts by other authors that I've found useful.
@@ -94,7 +97,7 @@ Scripts by other authors that I've found useful.
 
 ## API keys
 
-Several scripts (Target Manager, Retal Monitor, Ranked War Target Finder, Property Watcher, Shoplifting Store Alert) need a Torn API key. Keys are stored locally in your userscript manager's storage (`GM_setValue`) in **plain text** — they are never sent anywhere except `api.torn.com` over HTTPS. Because the storage is unencrypted, generate a **Limited Access** (minimal) key rather than a Full Access one; these scripts only read basic user/faction, profile, and attack data.
+Several scripts (Target Manager, Retal Monitor, Ranked War Target Finder, Property Watcher, Shoplifting Store Alert, Sell-Mug Check) need a Torn API key. Keys are stored locally in your userscript manager's storage (`GM_setValue`) in **plain text** — they are never sent anywhere except `api.torn.com` over HTTPS. Because the storage is unencrypted, generate a **Limited Access** (minimal) key rather than a Full Access one; these scripts only read basic user/faction, profile, and attack data.
 
 ## Dependencies
 
